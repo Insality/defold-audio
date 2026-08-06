@@ -1,0 +1,107 @@
+local audio = require("audio.audio")
+local sounds = require("example.sounds")
+
+local GAIN_STEP = 0.1
+local MUSIC_FADE_TIME = 1
+
+
+---@param self userdata
+---@param text string
+local function set_status(self, text)
+	gui.set_text(self.text_status, text)
+end
+
+
+---@param self userdata
+local function update_gain_texts(self)
+	gui.set_text(self.text_sfx_gain, string.format("sfx gain: %.2f", audio.get_gain("sfx")))
+	gui.set_text(self.text_music_gain, string.format("music gain: %.2f", audio.get_gain("music")))
+end
+
+
+---@param self userdata
+---@param group string
+---@param delta number
+local function change_gain(self, group, delta)
+	audio.set_gain(group, audio.get_gain(group) + delta)
+	update_gain_texts(self)
+	set_status(self, string.format("Set \"%s\" group gain to %.2f", group, audio.get_gain(group)))
+end
+
+
+---@param self userdata
+local function toggle_music(self)
+	if audio.is_playing("music") then
+		audio.fade("music", 0, MUSIC_FADE_TIME)
+		timer.delay(MUSIC_FADE_TIME, false, function()
+			audio.stop("music")
+		end)
+		set_status(self, "Fade out the music")
+		return
+	end
+
+	audio.play("music", 0)
+	audio.fade("music", 1, MUSIC_FADE_TIME)
+	set_status(self, "Fade in the music")
+end
+
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+
+	self.text_status = gui.get_node("text_status")
+	self.text_sfx_gain = gui.get_node("text_sfx_gain")
+	self.text_music_gain = gui.get_node("text_music_gain")
+
+	-- Restore the saved gains here with audio.set_state(loaded_state) before the init
+	audio.init(sounds)
+
+	update_gain_texts(self)
+end
+
+
+function on_input(self, action_id, action)
+	if not action.pressed then
+		return
+	end
+
+	if action_id == hash("key_1") then
+		audio.play("click")
+		set_status(self, "Play \"click\"")
+	end
+
+	if action_id == hash("key_2") then
+		audio.play("coin")
+		set_status(self, "Play \"coin\" with a random url and pitch")
+	end
+
+	if action_id == hash("key_3") then
+		audio.play_with_index("coin", 1)
+		set_status(self, "Play \"coin\" with the url index 1")
+	end
+
+	if action_id == hash("key_4") then
+		toggle_music(self)
+	end
+
+	if action_id == hash("key_5") then
+		audio.stop("music")
+		set_status(self, "Stop the music")
+	end
+
+	if action_id == hash("key_q") then
+		change_gain(self, "sfx", -GAIN_STEP)
+	end
+
+	if action_id == hash("key_w") then
+		change_gain(self, "sfx", GAIN_STEP)
+	end
+
+	if action_id == hash("key_a") then
+		change_gain(self, "music", -GAIN_STEP)
+	end
+
+	if action_id == hash("key_s") then
+		change_gain(self, "music", GAIN_STEP)
+	end
+end

@@ -1,0 +1,15 @@
+/.internal
+/build
+.DS_Store
+Thumbs.db
+deployer_version_settings.txt
+
+.deployer_cache
+dist
+deployer_build_stats.csv
+bob*.jar
+manifest.*.der
+/.editor_settings
+deployer_version_settings.ini
+luacov.report.out
+luacov.stats.out

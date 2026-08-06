@@ -1,0 +1,7 @@
+sound: "/example/sounds/music.wav"
+looping: 1
+group: "music"
+gain: 1.0
+pan: 0.0
+speed: 1.0
+loopcount: 0
