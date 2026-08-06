@@ -1,5 +1,5 @@
 [bootstrap]
-main_collection = /test/test.collectionc
+main_collection = /example/example.collectionc
 
 [script]
 shared_state = 1
@@ -32,4 +32,13 @@ message_block = ]: %message %context %tab<%function>
 
 [input]
 game_binding = /builtins/input/all.input_bindingc
+
+[html5]
+engine_arguments = --verify-graphics-calls=false
+heap_size = 32
+scale_mode = stretch
+show_fullscreen_button = 0
+show_made_with_defold = 0
+show_console_banner = 0
+cssfile = /builtins/manifests/web/dark_theme.css
 

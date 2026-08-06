@@ -2,10 +2,10 @@
 bob_folder=./
 
 # You can point bob version for project in format "filename:sha"
-bob_sha="1_12_1:16c6fd602f32de4814660672c38ce3ccbbc1fb59"
+bob_sha="1_13_1:f133873d9ec4cb4860f90f3ce6e79affffbc543b"
 
 # Select Defold channel. Values: stable, beta, alpha
-bob_channel="stable"
+bob_channel="beta"
 
 # If true, it will check and download latest bob version. It will ignore bob_sha param
 use_latest_bob=false

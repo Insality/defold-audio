@@ -13,6 +13,8 @@
 
 Instead of keeping the sound urls all over the project, you describe the sound once: where it is, how often it can be played, how many instances it can have and how much its pitch should be randomized. After that a single `audio.play("coin")` call is all you need.
 
+Check the [**HTML5 version**](https://insality.github.io/defold-audio/) of the example app.
+
 
 ## Features
 
