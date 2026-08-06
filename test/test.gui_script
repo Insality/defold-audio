@@ -4,6 +4,7 @@ function init(self)
 	deftest.add(require("test.test_audio"))
 	deftest.add(require("test.test_audio_gain"))
 	deftest.add(require("test.test_audio_fade"))
+	deftest.add(require("test.test_audio_play_delay"))
 
 	local is_report = (sys.get_config_int("test.report", 0) == 1)
 	deftest.run({ coverage = { enabled = is_report } })

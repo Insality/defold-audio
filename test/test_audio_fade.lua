@@ -28,6 +28,55 @@ return function()
 			audio.reset_state()
 		end)
 
+		it("Should create the single update timer on the init", function()
+			local runtime = audio_internal.get_runtime()
+			assert(runtime.update_timer ~= nil)
+
+			local update_timer = runtime.update_timer
+			audio.play("music", 1)
+			audio.fade("music", 0, 1)
+			audio_internal.update_fades()
+
+			-- The fades are only the numbers, the timer is never touched
+			assert(runtime.update_timer == update_timer)
+		end)
+
+		it("Should keep the update timer after the fade is finished", function()
+			local runtime = audio_internal.get_runtime()
+			local update_timer = runtime.update_timer
+
+			audio.play("music", 1)
+			audio.fade("music", 0, 1)
+
+			for _ = 1, 120 do
+				audio_internal.update_fades()
+			end
+
+			assert(runtime.fades["music"] == nil)
+			assert(runtime.update_timer == update_timer)
+		end)
+
+		it("Should keep the fades working after the next init", function()
+			local runtime = audio_internal.get_runtime()
+
+			audio.init(SOUNDS)
+			assert(runtime.update_timer ~= nil)
+
+			audio.play("music", 1)
+			audio.fade("music", 0, 1)
+			audio_internal.update_fades()
+
+			assert(runtime.last_gains["music"] < 1)
+		end)
+
+		it("Should keep the update timer on the reset state", function()
+			local runtime = audio_internal.get_runtime()
+			local update_timer = runtime.update_timer
+
+			audio.reset_state()
+			assert(runtime.update_timer == update_timer)
+		end)
+
 		it("Should set the gain instantly without the fade time", function()
 			local runtime = audio_internal.get_runtime()
 
@@ -72,7 +121,6 @@ return function()
 
 			assert(runtime.last_gains["music"] == 0)
 			assert(runtime.fades["music"] == nil)
-			assert(runtime.fade_timer == nil)
 		end)
 
 		it("Should fade in the sound", function()

@@ -1,12 +1,16 @@
 local audio_state = require("audio.internal.audio_state")
 
-local FADE_DT = 1 / 60
+local UPDATE_DT = 1 / 60
 
 ---@class audio.internal.fade
----@field id string
 ---@field value number
 ---@field target number
 ---@field step number
+
+---@class audio.internal.delayed_play
+---@field id string
+---@field remaining number
+---@field gain number|nil
 
 ---The sound config, used to register the sound in the audio module
 ---@class audio.sound
@@ -18,7 +22,9 @@ local FADE_DT = 1 / 60
 ---@class audio.internal.runtime
 ---@field sounds table<string, audio.sound>
 ---@field fades table<string, audio.internal.fade>
----@field fade_timer number|nil
+---@field delayed_plays table<number, audio.internal.delayed_play>
+---@field next_delay_handle number
+---@field update_timer number|nil
 ---@field last_gains table<string, number>
 ---@field last_play_time table<string, number>
 ---@field playing table<string, number>
@@ -32,7 +38,9 @@ local M = {}
 local runtime = {
 	sounds = {},
 	fades = {},
-	fade_timer = nil,
+	delayed_plays = {},
+	next_delay_handle = 1,
+	update_timer = nil,
 	last_gains = {},
 	last_play_time = {},
 	playing = {},
@@ -92,6 +100,21 @@ function M.get_url_at_index(sound_config, index)
 end
 
 
+---@param sound_config audio.sound
+---@param callback fun(url: hash|string|url)
+function M.for_each_url(sound_config, callback)
+	local urls = sound_config.url
+	if type(urls) == "table" then
+		for _, url in ipairs(urls) do
+			callback(url)
+		end
+		return
+	end
+
+	callback(urls)
+end
+
+
 ---@param id string
 ---@return audio.sound|nil
 function M.get_sound_config(id)
@@ -99,10 +122,10 @@ function M.get_sound_config(id)
 end
 
 
-function M.stop_fade_timer()
-	if runtime.fade_timer then
-		timer.cancel(runtime.fade_timer)
-		runtime.fade_timer = nil
+function M.stop_update_timer()
+	if runtime.update_timer then
+		timer.cancel(runtime.update_timer)
+		runtime.update_timer = nil
 	end
 end
 
@@ -115,25 +138,16 @@ function M.set_sound_gain_engine(id, engine_gain)
 		return
 	end
 
-	local urls = sound_config.url
-	if type(urls) == "table" then
-		for _, url in ipairs(urls) do
-			sound.set_gain(url, engine_gain)
-		end
-	else
-		sound.set_gain(urls, engine_gain)
-	end
+	M.for_each_url(sound_config, function(url)
+		sound.set_gain(url, engine_gain)
+	end)
 
 	runtime.last_gains[id] = engine_gain
 end
 
 
 function M.update_fades()
-	local has_fades = false
-
 	for id, fade in pairs(runtime.fades) do
-		has_fades = true
-
 		if fade.value < fade.target then
 			fade.value = math.min(fade.target, fade.value + fade.step)
 		elseif fade.value > fade.target then
@@ -146,24 +160,42 @@ function M.update_fades()
 			runtime.fades[id] = nil
 		end
 	end
-
-	if not has_fades or next(runtime.fades) == nil then
-		M.stop_fade_timer()
-	end
 end
 
 
-function M.on_fade_tick()
-	M.update_fades()
+---@param id string
+---@param delay number
+---@param gain number|nil
+---@return number handle
+function M.schedule_delayed_play(id, delay, gain)
+	local handle = runtime.next_delay_handle
+	runtime.next_delay_handle = handle + 1
+	runtime.delayed_plays[handle] = {
+		id = id,
+		remaining = delay,
+		gain = gain,
+	}
+	return handle
 end
 
 
-function M.ensure_fade_timer()
-	if runtime.fade_timer then
+---Cancel a delayed play by handle. Safe to call multiple times or with an unknown handle
+---@param handle number|nil
+function M.cancel_delayed_play(handle)
+	if handle == nil then
 		return
 	end
 
-	runtime.fade_timer = timer.delay(FADE_DT, true, M.on_fade_tick)
+	runtime.delayed_plays[handle] = nil
+end
+
+
+---Create the single update loop for the whole module. It's created on the audio.init call,
+---so the timer belongs to the script instance which initialized the module
+---@param callback fun()
+function M.create_update_timer(callback)
+	M.stop_update_timer()
+	runtime.update_timer = timer.delay(UPDATE_DT, true, callback)
 end
 
 
@@ -180,8 +212,8 @@ end
 
 
 ---@return number
-function M.get_fade_dt()
-	return FADE_DT
+function M.get_update_dt()
+	return UPDATE_DT
 end
 
 
@@ -203,13 +235,14 @@ function M.count_table_entries(t)
 end
 
 
+---Clear the runtime data. The update timer is kept, it's managed by the audio.init call
 function M.reset_runtime()
 	runtime.fades = {}
+	runtime.delayed_plays = {}
 	runtime.last_gains = {}
 	runtime.last_play_time = {}
 	runtime.playing = {}
 	runtime.playing_generation = {}
-	M.stop_fade_timer()
 end
 
 

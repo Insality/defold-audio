@@ -1,3 +1,5 @@
+![](media/logo.png)
+
 [![GitHub release (latest by date)](https://img.shields.io/github/v/tag/insality/defold-audio?style=for-the-badge&label=Release)](https://github.com/Insality/defold-audio/tags)
 [![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/insality/defold-audio/ci_workflow.yml?branch=main&style=for-the-badge)](https://github.com/Insality/defold-audio/actions)
 [![codecov](https://img.shields.io/codecov/c/github/Insality/defold-audio?style=for-the-badge)](https://codecov.io/gh/Insality/defold-audio)
@@ -19,6 +21,7 @@ Instead of keeping the sound urls all over the project, you describe the sound o
 - **Playback Control** - Play cooldown and max instances limit protects the game from the sound spam.
 - **Group Gain** - Manage the gain of the sound groups with a state, ready to be saved between the game sessions.
 - **Fade** - Fade the sound gain in and out over time. Useful for the music and ambient sounds.
+- **Play Delay** - Schedule a sound to play after a delay and cancel it later by handle.
 
 ## Setup
 
@@ -77,6 +80,10 @@ audio.play("coin")
 -- Play the sound with the custom gain
 audio.play("click", 0.5)
 
+-- Schedule the sound to play in 0.5 seconds. Cancel with the returned handle
+local handle = audio.play_delay("coin", 0.5)
+audio.cancel_play_delay(handle)
+
 -- Fade in the music in 1 second
 audio.play("music", 0)
 audio.fade("music", 1, 1)
@@ -115,7 +122,7 @@ saver.bind_save_state("audio", audio.get_state())
 
 > **Note:** The gain is linear in range `[0 .. 1]`, while the engine gain is not. The module converts the linear gain to the engine one, so the `0.5` gain sounds twice quieter, as the player expects.
 
-> **Note:** The `audio.fade` is processed with the `timer.delay`, so it is bound to the script instance which started the fade. Call the fade from a persistent script, if the game object can be deleted in the middle of the fade.
+> **Note:** The `audio.init` creates a single `timer.delay` to process all the fades and delayed plays. So call the init from a persistent script, for example from your loader, and they will work from anywhere in the game.
 
 
 ## API Reference
@@ -137,6 +144,8 @@ audio.reset_state()
 -- Playback
 audio.play(id, [gain])
 audio.play_with_index(id, index, [gain])
+audio.play_delay(id, delay, [gain])
+audio.cancel_play_delay([handle])
 audio.stop(id)
 audio.is_playing(id)
 audio.fade(id, target_gain, [time])

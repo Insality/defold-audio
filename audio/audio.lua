@@ -69,7 +69,28 @@ end
 
 
 -- Setup
----Initialize the audio module with the sounds config and apply the current group gains
+---Update the module fades and delayed plays. Called by the module update timer
+function M.update()
+	local runtime = audio_internal.get_runtime()
+	if next(runtime.fades) ~= nil then
+		audio_internal.update_fades()
+	end
+
+	if next(runtime.delayed_plays) ~= nil then
+		local dt = audio_internal.get_update_dt()
+		for handle, delayed in pairs(runtime.delayed_plays) do
+			delayed.remaining = delayed.remaining - dt
+			if delayed.remaining <= 0 then
+				runtime.delayed_plays[handle] = nil
+				M.play(delayed.id, delayed.gain)
+			end
+		end
+	end
+end
+
+
+---Initialize the audio module with the sounds config and apply the current group gains.
+---It creates the single module timer for fades and delayed plays, so call it from a persistent script, for example from your loader
 ---		audio.init(require("game.sounds"))
 ---		audio.init({
 ---			click = { url = "/sounds#click" },
@@ -78,6 +99,7 @@ end
 ---@param sounds table<string, audio.sound>|nil Sound configs by sound id. Can be nil to init without sounds
 function M.init(sounds)
 	audio_internal.set_sounds(sounds)
+	audio_internal.create_update_timer(M.update)
 
 	for group, value in pairs(audio_state.get_state().groups) do
 		sound.set_group_gain(group, audio_internal.to_engine_gain(value))
@@ -116,7 +138,7 @@ function M.set_state(new_state)
 end
 
 
----Reset the state to default and clear all runtime data. The registered sounds are kept
+---Reset the state to default and clear all runtime data. The registered sounds and the module timer are kept
 function M.reset_state()
 	audio_state.reset()
 	audio_internal.reset_runtime()
@@ -157,6 +179,38 @@ function M.play_with_index(id, index, gain)
 end
 
 
+---Schedule the sound to play after the delay. Uses an internal remaining-time counter on the module tick, not a separate timer
+---		local handle = audio.play_delay("click", 0.5)
+---		local handle = audio.play_delay("coin", 1, 0.5)
+---@param id string The sound id from the sounds config
+---@param delay number Delay in seconds before the sound is played
+---@param gain number|nil Linear gain in range [0 .. 1]. Default is the last used gain of this sound
+---@return number|nil handle Handle to cancel the delayed play with `audio.cancel_play_delay`. Nil if the sound is not registered or the delay is zero or negative
+function M.play_delay(id, delay, gain)
+	local sound_config = audio_internal.get_sound_config(id)
+	if not sound_config then
+		logger:warn("Attempt to play an unregistered sound", id)
+		return nil
+	end
+
+	if not delay or delay <= 0 then
+		M.play(id, gain)
+		return nil
+	end
+
+	return audio_internal.schedule_delayed_play(id, delay, gain)
+end
+
+
+---Cancel a delayed play by handle. Idempotent: safe to call multiple times, with nil, or after the sound has already played
+---		local handle = audio.play_delay("click", 0.5)
+---		audio.cancel_play_delay(handle)
+---@param handle number|nil Handle returned by `audio.play_delay`
+function M.cancel_play_delay(handle)
+	audio_internal.cancel_delayed_play(handle)
+end
+
+
 ---Stop all playing instances of the sound
 ---		audio.stop("music")
 ---@param id string The sound id from the sounds config
@@ -171,16 +225,9 @@ function M.stop(id)
 	runtime.fades[id] = nil
 	runtime.playing_generation[id] = (runtime.playing_generation[id] or 0) + 1
 
-	local urls = sound_config.url
-	if type(urls) == "table" then
-		for _, url in ipairs(urls) do
-			sound.stop(url)
-		end
-		runtime.playing[id] = 0
-		return
-	end
-
-	sound.stop(urls)
+	audio_internal.for_each_url(sound_config, function(url)
+		sound.stop(url)
+	end)
 	runtime.playing[id] = 0
 end
 
@@ -223,7 +270,7 @@ function M.fade(id, target_gain, time)
 		return
 	end
 
-	local step = math.abs(target - from) * audio_internal.get_fade_dt() / time
+	local step = math.abs(target - from) * audio_internal.get_update_dt() / time
 	if step <= 0 then
 		runtime.fades[id] = nil
 		audio_internal.set_sound_gain_engine(id, target)
@@ -231,13 +278,10 @@ function M.fade(id, target_gain, time)
 	end
 
 	runtime.fades[id] = {
-		id = id,
 		value = from,
 		target = target,
 		step = step,
 	}
-
-	audio_internal.ensure_fade_timer()
 end
 
 

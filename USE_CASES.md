@@ -116,7 +116,7 @@ end
 
 The `audio.stop` cancels the current fade of the sound, so the music can be stopped instantly at any moment.
 
-> **Note:** The fade is processed with the `timer.delay`, so it is bound to the script instance which started the fade. Call the fade from a persistent script, if the game object can be deleted in the middle of the fade.
+> **Note:** All the fades and delayed plays are processed by a single `timer.delay`, created inside the `audio.init` call. The `audio.fade` and `audio.play_delay` calls only change the numbers, so they will finish even if the game object which started them is deleted. Just call the `audio.init` from a persistent script, for example from your loader.
 
 
 ## Sound variations
@@ -194,6 +194,24 @@ local function toggle_music()
 	end
 end
 ```
+
+
+## Delayed play
+
+Schedule a sound to play later and keep the returned handle to cancel it.:
+
+```lua
+-- Play the coin sound in 0.5 seconds
+local handle = audio.play_delay("coin", 0.5)
+
+-- Cancel if the player left the reward screen before the delay finished
+audio.cancel_play_delay(handle)
+
+-- Safe to call again, with nil, or after the sound has already played
+audio.cancel_play_delay(handle)
+```
+
+If `delay` is zero or negative, the sound is played immediately and `nil` is returned.
 
 
 ## Logging

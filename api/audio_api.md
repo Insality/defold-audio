@@ -14,6 +14,8 @@ Used to register sounds and manage their playback and gain.
 - [reset_state](#reset_state)
 - [play](#play)
 - [play_with_index](#play_with_index)
+- [play_delay](#play_delay)
+- [cancel_play_delay](#cancel_play_delay)
 - [stop](#stop)
 - [is_playing](#is_playing)
 - [fade](#fade)
@@ -35,7 +37,8 @@ audio.init([sounds])
 ```
 
  Setup
-Initialize the audio module with the sounds config and apply the current group gains
+Initialize the audio module with the sounds config and apply the current group gains.
+It creates the single module timer for fades and delayed plays, so call it from a persistent script, for example from your loader
 
 - **Parameters:**
 	- `[sounds]` *(table<string, audio.sound>|nil)*: Sound configs by sound id. Can be nil to init without sounds
@@ -113,7 +116,7 @@ audio.init(require("game.sounds"))
 audio.reset_state()
 ```
 
-Reset the state to default and clear all runtime data. The registered sounds are kept
+Reset the state to default and clear all runtime data. The registered sounds and the module timer are kept
 
 ### play
 
@@ -155,6 +158,49 @@ Play the exact sound from the sound config urls list by index
 ```lua
 audio.play_with_index("footstep", 2)
 audio.play_with_index("footstep", 2, 0.5)
+```
+
+### play_delay
+
+---
+```lua
+audio.play_delay(id, delay, [gain])
+```
+
+Schedule the sound to play after the delay. Uses an internal remaining-time counter on the module tick, not a separate timer
+
+- **Parameters:**
+	- `id` *(string)*: The sound id from the sounds config
+	- `delay` *(number)*: Delay in seconds before the sound is played
+	- `[gain]` *(number|nil)*: Linear gain in range [0 .. 1]. Default is the last used gain of this sound
+
+- **Returns:**
+	- `handle` *(number|nil)*: Handle to cancel the delayed play with `audio.cancel_play_delay`. Nil if the sound is not registered or the delay is zero or negative
+
+- **Example Usage:**
+
+```lua
+local handle = audio.play_delay("click", 0.5)
+local handle = audio.play_delay("coin", 1, 0.5)
+```
+
+### cancel_play_delay
+
+---
+```lua
+audio.cancel_play_delay([handle])
+```
+
+Cancel a delayed play by handle. Idempotent: safe to call multiple times, with nil, or after the sound has already played
+
+- **Parameters:**
+	- `[handle]` *(number|nil)*: Handle returned by `audio.play_delay`
+
+- **Example Usage:**
+
+```lua
+local handle = audio.play_delay("click", 0.5)
+audio.cancel_play_delay(handle)
 ```
 
 ### stop
