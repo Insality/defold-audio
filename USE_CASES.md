@@ -9,21 +9,21 @@ Here is the full description of the sound config:
 
 ```lua
 ---@class audio.sound
----@field url string|string[] The sound component url or the list of urls to pick a random one
+---@field url string|string[] The sound component url or the list of urls to pick a random one. Prefer a full url with the socket
 ---@field random_pitch number|nil The random pitch in range [0 .. 1]. The sound speed will be randomized in range [1 - random_pitch .. 1 + random_pitch]
 ---@field play_cooldown number|nil The minimum time in seconds between the sound plays. Default is 4/60. Set 0 to disable
 ---@field max_instances number|nil The maximum number of simultaneously playing instances. The oldest instances are stopped on overflow
 ```
 
-Keep the config in a separate file and require it in the place where you init the module:
+Keep the config in a separate file and require it in the place where you init the module. Prefer full urls with the socket name, so playback works from any script:
 
 ```lua
 -- game/sounds.lua
 ---@type table<string, audio.sound>
 return {
-	click = { url = "/sounds#click" },
-	coin = { url = { "/sounds#coin_1", "/sounds#coin_2", "/sounds#coin_3" }, random_pitch = 0.1 },
-	music = { url = "/sounds#music", play_cooldown = 0 },
+	click = { url = "main:/sounds#click" },
+	coin = { url = { "main:/sounds#coin_1", "main:/sounds#coin_2", "main:/sounds#coin_3" }, random_pitch = 0.1 },
+	music = { url = "main:/sounds#music", play_cooldown = 0 },
 }
 ```
 
@@ -36,14 +36,16 @@ audio.init(require("game.sounds"))
 
 ## Prepare the sounds in the project
 
-The module plays the sound components, so they should exist in the loaded collection:
+The module plays the sound components, so they should exist in a loaded persistent collection:
 
 1. Add the sound files (`.wav` or `.ogg`) to your project.
 2. Create the `.sound` component for each sound file and set the `group` field, for example `sfx` or `music`.
 3. Add all sound components to a single game object, for example `sounds`, in your bootstrap collection.
-4. Use the component urls in the sounds config: `/sounds#click`.
+4. Use the full component urls in the sounds config: `main:/sounds#click`.
 
 Keeping all sounds in one persistent game object is the simplest way, so any script in the game can play them by id.
+
+Relative urls like `/sounds#click` also work, but they resolve against the current script collection: `audio.play` / `audio.stop` use the caller, while `audio.play_delay` / `audio.fade` use the collection where `audio.init` was called. Prefer full urls with the socket to avoid this difference.
 
 
 ## Save the audio state
@@ -116,7 +118,7 @@ end
 
 The `audio.stop` cancels the current fade of the sound, so the music can be stopped instantly at any moment.
 
-> **Note:** All the fades and delayed plays are processed by a single `timer.delay`, created inside the `audio.init` call. The `audio.fade` and `audio.play_delay` calls only change the numbers, so they will finish even if the game object which started them is deleted. Just call the `audio.init` from a persistent script, for example from your loader.
+> **Note:** All the fades and delayed plays are processed by a single `timer.delay`, created inside the `audio.init` call. The `audio.fade` and `audio.play_delay` calls only change the numbers, so they will finish even if the game object which started them is deleted. Call the `audio.init` from a persistent script, for example from your loader. Relative sound urls for delay/fade are also resolved in that collection, so prefer full urls with the socket (`main:/sounds#music`).
 
 
 ## Sound variations
@@ -126,7 +128,7 @@ The repetitive sounds are the fastest way to annoy the player. Use the list of u
 ```lua
 audio.init({
 	footstep = {
-		url = { "/sounds#footstep_1", "/sounds#footstep_2", "/sounds#footstep_3" },
+		url = { "main:/sounds#footstep_1", "main:/sounds#footstep_2", "main:/sounds#footstep_3" },
 		random_pitch = 0.15,
 		play_cooldown = 0.1,
 	},
@@ -141,7 +143,7 @@ If you need the exact sound from the list, use the `audio.play_index`. It's usef
 ```lua
 audio.init({
 	combo = {
-		url = { "/sounds#combo_1", "/sounds#combo_2", "/sounds#combo_3" },
+		url = { "main:/sounds#combo_1", "main:/sounds#combo_2", "main:/sounds#combo_3" },
 		play_cooldown = 0,
 	},
 })
@@ -162,19 +164,19 @@ Two configs are used to keep the sound mix clean:
 audio.init({
 	-- The collected coins are played in a burst, keep only 3 of them at once
 	coin = {
-		url = "/sounds#coin",
+		url = "main:/sounds#coin",
 		play_cooldown = 0.03,
 		max_instances = 3,
 	},
 
 	-- The UI click should not be played twice in the same frame
 	click = {
-		url = "/sounds#click",
+		url = "main:/sounds#click",
 	},
 
 	-- The music is a single long sound, no cooldown is required
 	music = {
-		url = "/sounds#music",
+		url = "main:/sounds#music",
 		play_cooldown = 0,
 	},
 })
