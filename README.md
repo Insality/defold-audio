@@ -143,7 +143,7 @@ audio.reset_state()
 
 -- Playback
 audio.play(id, [gain])
-audio.play_with_index(id, index, [gain])
+audio.play_index(id, index, [gain])
 audio.play_delay(id, delay, [gain])
 audio.cancel_play_delay([handle])
 audio.stop(id)

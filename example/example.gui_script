@@ -76,7 +76,7 @@ function on_input(self, action_id, action)
 	end
 
 	if action_id == hash("key_3") then
-		audio.play_with_index("coin", 1)
+		audio.play_index("coin", 1)
 		set_status(self, "Play \"coin\" with the url index 1")
 	end
 

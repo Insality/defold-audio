@@ -13,7 +13,7 @@ Used to register sounds and manage their playback and gain.
 - [set_state](#set_state)
 - [reset_state](#reset_state)
 - [play](#play)
-- [play_with_index](#play_with_index)
+- [play_index](#play_index)
 - [play_delay](#play_delay)
 - [cancel_play_delay](#cancel_play_delay)
 - [stop](#stop)
@@ -139,11 +139,11 @@ audio.play("click")
 audio.play("coin", 0.5)
 ```
 
-### play_with_index
+### play_index
 
 ---
 ```lua
-audio.play_with_index(id, index, [gain])
+audio.play_index(id, index, [gain])
 ```
 
 Play the exact sound from the sound config urls list by index
@@ -156,8 +156,8 @@ Play the exact sound from the sound config urls list by index
 - **Example Usage:**
 
 ```lua
-audio.play_with_index("footstep", 2)
-audio.play_with_index("footstep", 2, 0.5)
+audio.play_index("footstep", 2)
+audio.play_index("footstep", 2, 0.5)
 ```
 
 ### play_delay

@@ -163,12 +163,12 @@ end
 
 
 ---Play the exact sound from the sound config urls list by index
----		audio.play_with_index("footstep", 2)
----		audio.play_with_index("footstep", 2, 0.5)
+---		audio.play_index("footstep", 2)
+---		audio.play_index("footstep", 2, 0.5)
 ---@param id string The sound id from the sounds config
 ---@param index number Index of the url in the sound config urls list, starts from 1
 ---@param gain number|nil Linear gain in range [0 .. 1]. Default is the last used gain of this sound
-function M.play_with_index(id, index, gain)
+function M.play_index(id, index, gain)
 	local sound_config = audio_internal.get_sound_config(id)
 	if not sound_config then
 		logger:warn("Attempt to play an unregistered sound", id)

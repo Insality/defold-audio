@@ -136,7 +136,7 @@ audio.init({
 audio.play("footstep")
 ```
 
-If you need the exact sound from the list, use the `audio.play_with_index`. It's useful when the sound depends on the game state, for example the combo counter:
+If you need the exact sound from the list, use the `audio.play_index`. It's useful when the sound depends on the game state, for example the combo counter:
 
 ```lua
 audio.init({
@@ -147,7 +147,7 @@ audio.init({
 })
 
 -- The index is clamped to the urls list, so the combo 10 will play the last sound
-audio.play_with_index("combo", combo_counter)
+audio.play_index("combo", combo_counter)
 ```
 
 

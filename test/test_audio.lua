@@ -64,7 +64,7 @@ return function()
 		end)
 
 		it("Should play the sound with the url index", function()
-			audio.play_with_index("coin", 2)
+			audio.play_index("coin", 2)
 			assert(audio.is_playing("coin"))
 		end)
 
