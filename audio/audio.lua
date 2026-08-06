@@ -93,8 +93,8 @@ end
 ---It creates the single module timer for fades and delayed plays, so call it from a persistent script, for example from your loader
 ---		audio.init(require("game.sounds"))
 ---		audio.init({
----			click = { url = "/sounds#click" },
----			coin = { url = { "/sounds#coin_1", "/sounds#coin_2" }, random_pitch = 0.1 },
+---			click = { url = "main:/sounds#click" },
+---			coin = { url = { "main:/sounds#coin_1", "main:/sounds#coin_2" }, random_pitch = 0.1 },
 ---		})
 ---@param sounds table<string, audio.sound>|nil Sound configs by sound id. Can be nil to init without sounds
 function M.init(sounds)

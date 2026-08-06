@@ -14,7 +14,7 @@ local UPDATE_DT = 1 / 60
 
 ---The sound config, used to register the sound in the audio module
 ---@class audio.sound
----@field url string|string[] The sound component url or the list of urls to pick a random one
+---@field url string|string[] The sound component url or the list of urls to pick a random one. Prefer a full url with the socket. Relative urls resolve to the caller for play/stop and to the audio.init collection for play_delay/fade
 ---@field random_pitch number|nil The random pitch in range [0 .. 1]. The sound speed will be randomized in range [1 - random_pitch .. 1 + random_pitch]
 ---@field play_cooldown number|nil The minimum time in seconds between the sound plays. Default is 4/60. Set 0 to disable
 ---@field max_instances number|nil The maximum number of simultaneously playing instances. The oldest instances are stopped on overflow

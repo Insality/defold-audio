@@ -51,22 +51,22 @@ After that, select `Project ▸ Fetch Libraries` to update [library dependencies
 
 ## Basic Usage
 
-Place the sound components in your collection, for example in the `/sounds` game object, and describe them in the sounds config:
+Place the sound components in a persistent collection (for example at your loader) and describe them in the sounds config. Prefer full URLs with the socket name, so playback works from any script:
 
 ```lua
 local audio = require("audio.audio")
 
 audio.init({
 	click = {
-		url = "/sounds#click",
+		url = "main:/sounds#click",
 	},
 	coin = {
-		url = { "/sounds#coin_1", "/sounds#coin_2", "/sounds#coin_3" },
+		url = { "main:/sounds#coin_1", "main:/sounds#coin_2", "main:/sounds#coin_3" },
 		random_pitch = 0.1,
 		max_instances = 3,
 	},
 	music = {
-		url = "/sounds#music",
+		url = "main:/sounds#music",
 		play_cooldown = 0,
 	},
 })
@@ -99,7 +99,7 @@ Each sound is registered with the `audio.sound` config:
 
 | Field           | Type                  | Description                                                                                       |
 | --------------- | --------------------- | ------------------------------------------------------------------------------------------------- |
-| `url`           | `string \| string[]`  | The sound component url or the list of urls. A random url is picked on each `audio.play` call       |
+| `url`           | `string \| string[]`  | The sound component url or the list of urls. Prefer a full url with the socket (`main:/sounds#click`). A random url is picked on each `audio.play` call |
 | `random_pitch`  | `number \| nil`       | Randomize the sound speed in range `[1 - random_pitch .. 1 + random_pitch]`                          |
 | `play_cooldown` | `number \| nil`       | The minimum time in seconds between the sound plays. Default is `4/60`. Set `0` to disable           |
 | `max_instances` | `number \| nil`       | The maximum number of the simultaneously playing instances. The sound is restarted on the overflow  |
@@ -122,7 +122,9 @@ saver.bind_save_state("audio", audio.get_state())
 
 > **Note:** The gain is linear in range `[0 .. 1]`, while the engine gain is not. The module converts the linear gain to the engine one, so the `0.5` gain sounds twice quieter, as the player expects.
 
-> **Note:** The `audio.init` creates a single `timer.delay` to process all the fades and delayed plays. So call the init from a persistent script, for example from your loader, and they will work from anywhere in the game.
+> **Note:** The `audio.init` creates a single `timer.delay` to process all the fades and delayed plays. Call the init from a persistent script, for example from your loader, so they keep working while collections are loaded and unloaded.
+
+> **Note:** Relative sound urls like `/sounds#click` are resolved against the current script collection. Immediate `audio.play` / `audio.stop` use the caller's collection, while `audio.play_delay` and `audio.fade` use the collection where `audio.init` was called. Prefer full urls with the socket (`main:/sounds#click`) to avoid this difference.
 
 
 ## API Reference
