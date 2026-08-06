@@ -47,8 +47,8 @@ After that, select `Project ▸ Fetch Libraries` to update [library dependencies
 
 | Platform         | Library Size |
 | ---------------- | ------------ |
-| HTML5            | **9.95 KB**  |
-| Desktop / Mobile | **10.16 KB** |
+| HTML5            | **4.29 KB**  |
+| Desktop / Mobile | **7.43 KB** |
 
 
 ## Basic Usage
