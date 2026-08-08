@@ -29,8 +29,6 @@ Check the [**HTML5 version**](https://insality.github.io/defold-audio/) of the e
 
 ### [Dependency](https://www.defold.com/manuals/libraries/)
 
-> Can be installed from the [Asset Store](https://github.com/Insality/asset-store) extension to skip this step.
-
 Open your `game.project` file and add the following line to the dependencies field under the project section:
 
 **[Defold Audio](https://github.com/Insality/defold-audio/archive/refs/tags/1.zip)**

@@ -7,22 +7,22 @@ jobs:
         name: Build and run tests
         runs-on: ubuntu-latest
         steps:
-          - uses: actions/checkout@v4
+          - uses: actions/checkout@v5
             with:
                 lfs: true
 
-          - uses: actions/setup-java@v3
+          - uses: actions/setup-java@v5
             with:
                 distribution: 'zulu'
-                java-version: '21'
+                java-version: '25'
 
           - name: Build && Run
             run: |
-              deployer_url="https://raw.githubusercontent.com/Insality/defold-deployer/4/deployer.sh"
+              deployer_url="https://raw.githubusercontent.com/Insality/defold-deployer/6/deployer.sh"
               curl -s ${deployer_url} | bash -s lbd --headless --settings ./test/test.ini
 
           - name: Upload coverage reports to Codecov
-            uses: codecov/codecov-action@v4.0.1
+            uses: codecov/codecov-action@v5
             with:
               token: ${{ secrets.CODECOV_TOKEN }}
-              slug: insality/defold-audio
+              slug: Insality/defold-audio

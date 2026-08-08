@@ -16,15 +16,16 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: true
 
       - name: setup java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: "zulu"
           java-version: "25"
+
 
       - name: install deps
         run: |
@@ -33,7 +34,7 @@ jobs:
 
       - name: build html5
         run: |
-          deployer_url="https://raw.githubusercontent.com/Insality/defold-deployer/4/deployer.sh"
+          deployer_url="https://raw.githubusercontent.com/Insality/defold-deployer/6/deployer.sh"
           curl -s "${deployer_url}" | bash -s hbr --settings ./example/example.ini
 
       - name: find build artifacts
@@ -49,12 +50,12 @@ jobs:
           echo "zip=${HTML_ZIP}" >> $GITHUB_OUTPUT
 
       - name: upload pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ${{ steps.artifacts.outputs.dir }}
 
       - name: upload html zip
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: html-build
           path: ${{ steps.artifacts.outputs.zip }}
@@ -66,11 +67,11 @@ jobs:
       name: github-pages
     steps:
       - name: configure pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v6
 
       - name: deploy to pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
       - name: summary
         run: |
