@@ -90,7 +90,8 @@ end
 
 
 ---Initialize the audio module with the sounds config and apply the current group gains.
----It creates the single module timer for fades and delayed plays, so call it from a persistent script, for example from your loader
+---It creates the single module timer for fades and delayed plays, so call it from a persistent script, for example from your loader.
+---The relative sound urls like `/sounds#click` are resolved in the collection of the calling script
 ---		audio.init(require("game.sounds"))
 ---		audio.init({
 ---			click = { url = "main:/sounds#click" },
@@ -108,6 +109,19 @@ function M.init(sounds)
 	logger:info("Audio module initialized", {
 		sounds = audio_internal.get_sounds_count(),
 		groups = audio_internal.count_table_entries(audio_state.get_state().groups),
+	})
+end
+
+
+---Register the additional sounds after the `audio.init` call. The sound urls are resolved in the collection
+---of the calling script, so it's the way to register the sounds which are placed inside a collection proxy
+---		audio.add_sounds(require("game.level_sounds"))
+---@param sounds table<string, audio.sound> Sound configs by sound id. The sounds with the same id are replaced
+function M.add_sounds(sounds)
+	audio_internal.add_sounds(sounds)
+
+	logger:info("Audio sounds added", {
+		sounds = audio_internal.get_sounds_count(),
 	})
 end
 

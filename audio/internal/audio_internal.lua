@@ -1,3 +1,4 @@
+local logger = require("audio.internal.audio_logger")
 local audio_state = require("audio.internal.audio_state")
 
 local UPDATE_DT = 1 / 60
@@ -14,7 +15,7 @@ local UPDATE_DT = 1 / 60
 
 ---The sound config, used to register the sound in the audio module
 ---@class audio.sound
----@field url string|string[] The sound component url or the list of urls to pick a random one. Prefer a full url with the socket. Relative urls resolve to the caller for play/stop and to the audio.init collection for play_delay/fade
+---@field url string|string[] The sound component url or the list of urls to pick a random one. Relative urls like `/sounds#click` are resolved in the collection where `audio.init` or `audio.add_sounds` was called
 ---@field random_pitch number|nil The random pitch in range [0 .. 1]. The sound speed will be randomized in range [1 - random_pitch .. 1 + random_pitch]
 ---@field play_cooldown number|nil The minimum time in seconds between the sound plays. Default is 4/60. Set 0 to disable
 ---@field max_instances number|nil The maximum number of simultaneously playing instances. The oldest instances are stopped on overflow
@@ -199,9 +200,67 @@ function M.create_update_timer(callback)
 end
 
 
+---Resolve the url string to the full url in the current script context. It makes the sound url
+---independent from the place it is played from, since the delayed plays and fades are processed
+---in the context of the script which created the module timer
+---@param url string|hash|url
+---@return hash|string|url
+local function resolve_url(url)
+	if type(url) ~= "string" then
+		return url
+	end
+
+	local is_resolved, resolved_url = pcall(msg.url, url)
+	if not is_resolved then
+		logger:warn("Can't resolve the sound url", url)
+		return url
+	end
+
+	return resolved_url
+end
+
+
+---Make a copy of the sound config with the urls resolved in the current script context.
+---The passed config is not modified, so the same sounds table can be registered several times
+---@param sound_config audio.sound
+---@return audio.sound
+local function resolve_sound_config(sound_config)
+	local config = {}
+	for key, value in pairs(sound_config) do
+		config[key] = value
+	end
+
+	local urls = sound_config.url
+	if type(urls) == "table" then
+		config.url = {}
+		for index = 1, #urls do
+			config.url[index] = resolve_url(urls[index])
+		end
+	else
+		config.url = resolve_url(urls)
+	end
+
+	return config
+end
+
+
+---Register the sounds in addition to the already registered ones. The sounds with the same id are replaced
+---@param sounds table<string, audio.sound>|nil
+function M.add_sounds(sounds)
+	if not sounds then
+		return
+	end
+
+	for id, sound_config in pairs(sounds) do
+		runtime.sounds[id] = resolve_sound_config(sound_config)
+	end
+end
+
+
 ---@param sounds table<string, audio.sound>|nil
 function M.set_sounds(sounds)
-	runtime.sounds = sounds or {}
+	runtime.sounds = {}
+	M.add_sounds(sounds)
 end
 
 
