@@ -45,7 +45,16 @@ The module plays the sound components, so they should exist in a loaded persiste
 
 Keeping all sounds in one persistent game object is the simplest way, so any script in the game can play them by id.
 
-Relative urls like `/sounds#click` also work, but they resolve against the current script collection: `audio.play` / `audio.stop` use the caller, while `audio.play_delay` / `audio.fade` use the collection where `audio.init` was called. Prefer full urls with the socket to avoid this difference.
+Relative urls like `/sounds#click` also work. They are resolved once, at the moment the sound is registered, in the collection of the script which called `audio.init`. So the sound is played from the same component, no matter which script calls `audio.play`.
+
+If some sounds are placed inside a collection loaded by the collection proxy, register them with `audio.add_sounds` from a script inside that collection, so their relative urls are resolved in the correct socket:
+
+```lua
+-- The script inside the proxy collection
+function init(self)
+	audio.add_sounds(require("game.level_sounds"))
+end
+```
 
 
 ## Save the audio state

@@ -31,10 +31,10 @@ Check the [**HTML5 version**](https://insality.github.io/defold-audio/) of the e
 
 Open your `game.project` file and add the following line to the dependencies field under the project section:
 
-**[Defold Audio](https://github.com/Insality/defold-audio/archive/refs/tags/1.zip)**
+**[Defold Audio](https://github.com/Insality/defold-audio/archive/refs/tags/2.zip)**
 
 ```
-https://github.com/Insality/defold-audio/archive/refs/tags/1.zip
+https://github.com/Insality/defold-audio/archive/refs/tags/2.zip
 ```
 
 After that, select `Project ▸ Fetch Libraries` to update [library dependencies]((https://defold.com/manuals/libraries/#setting-up-library-dependencies)). This happens automatically whenever you open a project so you will only need to do this if the dependencies change without re-opening the project.
@@ -99,7 +99,7 @@ Each sound is registered with the `audio.sound` config:
 
 | Field           | Type                  | Description                                                                                       |
 | --------------- | --------------------- | ------------------------------------------------------------------------------------------------- |
-| `url`           | `string \| string[]`  | The sound component url or the list of urls. Prefer a full url with the socket (`main:/sounds#click`). A random url is picked on each `audio.play` call |
+| `url`           | `string \| string[]`  | The sound component url or the list of urls. The relative urls are resolved in the collection where the sound is registered. A random url is picked on each `audio.play` call |
 | `random_pitch`  | `number \| nil`       | Randomize the sound speed in range `[1 - random_pitch .. 1 + random_pitch]`                          |
 | `play_cooldown` | `number \| nil`       | The minimum time in seconds between the sound plays. Default is `4/60`. Set `0` to disable           |
 | `max_instances` | `number \| nil`       | The maximum number of the simultaneously playing instances. The sound is restarted on the overflow  |
@@ -124,7 +124,14 @@ saver.bind_save_state("audio", audio.get_state())
 
 > **Note:** The `audio.init` creates a single `timer.delay` to process all the fades and delayed plays. Call the init from a persistent script, for example from your loader, so they keep working while collections are loaded and unloaded.
 
-> **Note:** Relative sound urls like `/sounds#click` are resolved against the current script collection. Immediate `audio.play` / `audio.stop` use the caller's collection, while `audio.play_delay` and `audio.fade` use the collection where `audio.init` was called. Prefer full urls with the socket (`main:/sounds#click`) to avoid this difference.
+> **Note:** The sound urls are resolved once, in the collection of the script which called `audio.init`. So the relative urls like `/sounds#click` work the same from any place they are played from. The full urls with the socket (`main:/sounds#click`) are not affected by the place of the `audio.init` call at all.
+
+> **Note:** If the sounds are placed inside a collection loaded by the collection proxy, register them with `audio.add_sounds` from a script inside that collection, so their relative urls are resolved in the correct socket:
+> ```lua
+> function init(self)
+> 	audio.add_sounds(require("game.level_sounds"))
+> end
+> ```
 
 
 ## API Reference
@@ -136,6 +143,7 @@ local audio = require("audio.audio")
 
 -- Setup
 audio.init([sounds])
+audio.add_sounds(sounds)
 audio.set_logger([logger_instance])
 
 -- Save and load state
@@ -185,6 +193,13 @@ For any issues, questions, or suggestions, please [create an issue](https://gith
 
 ### **V1**
 - Initial Release
+
+### **V2**
+- The sound urls are now resolved at the registration time, in the collection of the script which called `audio.init`. So the relative urls like `/sounds#click` are played from the same component, no matter which script calls `audio.play`
+	- Previously the relative urls were resolved on each call: `audio.play` / `audio.stop` used the caller collection, while `audio.play_delay` and `audio.fade` used the collection of the `audio.init` call
+	- The full urls with the socket (`main:/sounds#click`) are not affected
+- Add `audio.add_sounds` function to register the additional sounds after the init
+	- Use it to register the sounds which are placed inside a collection loaded by the collection proxy, so their relative urls are resolved in the correct socket
 
 </details>
 
