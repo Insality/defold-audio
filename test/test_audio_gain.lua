@@ -22,6 +22,7 @@ return function()
 			audio.set_logger(nil)
 			audio.reset_state()
 			audio.add_sounds(SOUNDS)
+			audio.init()
 		end)
 
 		after(function()

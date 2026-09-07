@@ -41,6 +41,8 @@ After that, select `Project ▸ Fetch Libraries` to update [library dependencies
 
 Add `audio.script` to a game object in the collection that should own the playback. It can be the loader, a bootstrap collection, or the same game object as the sound components. This script starts the sounds, fades and delayed plays, so keep it loaded while you need audio.
 
+You can skip `audio.script` and call `audio.init`, `audio.update`, `audio.final` and `audio.on_message` from your own persistent script instead.
+
 ### Library Size
 
 > **Note:** The library size is calculated as the size of the compiled Lua files in a release build
@@ -209,6 +211,10 @@ For any issues, questions, or suggestions, please [create an issue](https://gith
 - Register sounds with `audio.add_sounds` from your scripts. The `audio.init` no longer takes the sounds config
 - Sound plays and fading are processed in the `audio.script`
 - The group gains from `audio.set_state` are applied to the engine immediately
+- Migration from V2:
+	- Add `audio.script` to a persistent game object
+	- Replace `audio.init(sounds)` with `audio.add_sounds(sounds)`
+	- `audio.set_state` can be called at any time, the group gains are applied immediately
 
 </details>
 

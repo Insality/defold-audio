@@ -321,14 +321,18 @@ function M.count_table_entries(t)
 end
 
 
----Clear the runtime data. The registered sounds and the audio host are kept
+---Clear the runtime data. The registered sounds and the audio host are kept.
+---In-flight play messages are invalidated by bumping the generation of every registered sound
 function M.reset_runtime()
 	runtime.fades = {}
 	runtime.delayed_plays = {}
 	runtime.last_gains = {}
 	runtime.last_play_time = {}
 	runtime.playing = {}
-	runtime.playing_generation = {}
+
+	for id in pairs(runtime.sounds) do
+		runtime.playing_generation[id] = (runtime.playing_generation[id] or 0) + 1
+	end
 end
 
 

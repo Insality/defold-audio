@@ -3,7 +3,6 @@ local audio = require("audio.audio")
 
 function init(self)
 	audio.set_logger(nil)
-	audio.init()
 
 	deftest.add(require("test.test_audio"))
 	deftest.add(require("test.test_audio_gain"))

@@ -109,6 +109,29 @@ return function()
 			assert(not audio.is_playing("click"))
 		end)
 
+		it("Should skip the queued play after the reset state", function()
+			msg.post = function()
+				-- Keep the play queued in the message and handle it later
+			end
+
+			audio.play("click")
+			assert(audio.is_playing("click"))
+
+			local play = {
+				id = "click",
+				url = audio_internal.get_sound_config("click").url,
+				gain = 1,
+				speed = 1,
+				generation = 0,
+			}
+
+			audio.reset_state()
+			audio_internal.handle_play(play)
+
+			assert(#play_calls == 0)
+			assert(not audio.is_playing("click"))
+		end)
+
 		it("Should keep the audio host on the reset state", function()
 			audio.reset_state()
 			audio.play("click")
