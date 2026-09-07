@@ -31,14 +31,14 @@ return function()
 			audio_internal = require("audio.internal.audio_internal")
 			audio.set_logger(nil)
 			audio.reset_state()
-			audio.init(SOUNDS)
+			audio_internal.set_sounds(SOUNDS)
 		end)
 
 		after(function()
 			audio.reset_state()
 		end)
 
-		it("Should resolve the relative url to the full url on init", function()
+		it("Should resolve the relative url to the full url on add_sounds", function()
 			local sound_config = audio_internal.get_sound_config("click")
 			assert(sound_config.url == msg.url("/sounds#click"))
 		end)
@@ -64,7 +64,7 @@ return function()
 
 		it("Should keep the full url with the socket the same", function()
 			local socket_name = get_socket_name(msg.url("/sounds#click"))
-			audio.init({
+			audio.add_sounds({
 				click = { url = socket_name .. ":/sounds#click" },
 			})
 
@@ -74,7 +74,7 @@ return function()
 
 		it("Should keep the already resolved url as is", function()
 			local resolved_url = msg.url("/sounds#click")
-			audio.init({
+			audio.add_sounds({
 				click = { url = resolved_url },
 			})
 
@@ -82,16 +82,16 @@ return function()
 			assert(sound_config.url == resolved_url)
 		end)
 
-		it("Should resolve the same sounds config on the repeated init", function()
-			audio.init(SOUNDS)
-			audio.init(SOUNDS)
+		it("Should resolve the same sounds config on the repeated add_sounds", function()
+			audio.add_sounds(SOUNDS)
+			audio.add_sounds(SOUNDS)
 
 			local sound_config = audio_internal.get_sound_config("click")
 			assert(sound_config.url == msg.url("/sounds#click"))
 		end)
 
 		it("Should keep the sound registered if the url can't be resolved", function()
-			audio.init({
+			audio.add_sounds({
 				broken = { url = "bad:url:with#too#many" },
 			})
 

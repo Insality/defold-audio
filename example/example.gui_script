@@ -53,8 +53,8 @@ function init(self)
 	self.text_sfx_gain = gui.get_node("text_sfx_gain")
 	self.text_music_gain = gui.get_node("text_music_gain")
 
-	-- Restore the saved gains here with audio.set_state(loaded_state) before the init
-	audio.init(sounds)
+	-- Restore the saved gains here with audio.set_state(loaded_state)
+	audio.add_sounds(sounds)
 
 	update_gain_texts(self)
 end

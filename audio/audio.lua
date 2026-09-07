@@ -15,6 +15,11 @@ local DEFAULT_PLAY_COOLDOWN = 4 / 60
 ---@param gain number|nil
 local function play_sound(id, url, gain)
 	local runtime = audio_internal.get_runtime()
+	if not audio_internal.has_host() then
+		logger:warn("Audio host is missing. Add audio.script to a persistent game object", id)
+		return
+	end
+
 	local sound_config = audio_internal.get_sound_config(id)
 	if not sound_config then
 		return
@@ -52,32 +57,34 @@ local function play_sound(id, url, gain)
 		speed = 1 + (math.random() * 2 - 1) * sound_config.random_pitch
 	end
 
-	runtime.props.gain = engine_gain
-	runtime.props.speed = speed
 	local play_generation = runtime.playing_generation[id] or 0
 	runtime.playing[id] = playing_instances + 1
-	sound.play(url, runtime.props, function()
-		if (runtime.playing_generation[id] or 0) ~= play_generation then
-			return
-		end
-		local current_instances = runtime.playing[id] or 0
-		runtime.playing[id] = math.max(0, current_instances - 1)
-	end)
+	audio_internal.request_play({
+		id = id,
+		url = url,
+		gain = engine_gain,
+		speed = speed,
+		generation = play_generation,
+	})
 
 	audio_internal.set_sound_gain_engine(id, engine_gain)
 end
 
 
 -- Setup
----Update the module fades and delayed plays. Called by the module update timer
-function M.update()
+---Update the module fades and delayed plays. Called by `audio.script`
+---@param dt number Frame delta time in seconds
+function M.update(dt)
+	if not dt or dt <= 0 then
+		return
+	end
+
 	local runtime = audio_internal.get_runtime()
 	if next(runtime.fades) ~= nil then
-		audio_internal.update_fades()
+		audio_internal.update_fades(dt)
 	end
 
 	if next(runtime.delayed_plays) ~= nil then
-		local dt = audio_internal.get_update_dt()
 		for handle, delayed in pairs(runtime.delayed_plays) do
 			delayed.remaining = delayed.remaining - dt
 			if delayed.remaining <= 0 then
@@ -89,18 +96,9 @@ function M.update()
 end
 
 
----Initialize the audio module with the sounds config and apply the current group gains.
----It creates the single module timer for fades and delayed plays, so call it from a persistent script, for example from your loader.
----The relative sound urls like `/sounds#click` are resolved in the collection of the calling script
----		audio.init(require("game.sounds"))
----		audio.init({
----			click = { url = "main:/sounds#click" },
----			coin = { url = { "main:/sounds#coin_1", "main:/sounds#coin_2" }, random_pitch = 0.1 },
----		})
----@param sounds table<string, audio.sound>|nil Sound configs by sound id. Can be nil to init without sounds
-function M.init(sounds)
-	audio_internal.set_sounds(sounds)
-	audio_internal.create_update_timer(M.update)
+---Initialize the audio host. Called by `audio.script`
+function M.init()
+	audio_internal.bind_host(msg.url())
 
 	for group, value in pairs(audio_state.get_state().groups) do
 		sound.set_group_gain(group, audio_internal.to_engine_gain(value))
@@ -113,8 +111,25 @@ function M.init(sounds)
 end
 
 
----Register the additional sounds after the `audio.init` call. The sound urls are resolved in the collection
+---Clear the audio host if this script is the current one. Called by `audio.script` on final
+function M.final()
+	audio_internal.unbind_host(msg.url())
+end
+
+
+---Handle the play messages posted to `audio.script`
+---@param message_id hash
+---@param message table
+function M.on_message(message_id, message)
+	if message_id == audio_internal.MSG_PLAY then
+		audio_internal.handle_play(message)
+	end
+end
+
+
+---Register the additional sounds. The sound urls are resolved in the collection
 ---of the calling script, so it's the way to register the sounds which are placed inside a collection proxy
+---		audio.add_sounds(require("game.sounds"))
 ---		audio.add_sounds(require("game.level_sounds"))
 ---@param sounds table<string, audio.sound> Sound configs by sound id. The sounds with the same id are replaced
 function M.add_sounds(sounds)
@@ -143,16 +158,19 @@ function M.get_state()
 end
 
 
----Set the state (for deserialization). Call it before `audio.init` to restore the saved group gains
+---Set the state (for deserialization). The group gains are applied to the engine immediately
 ---		audio.set_state(loaded_state)
----		audio.init(require("game.sounds"))
 ---@param new_state audio.state Previously saved state
 function M.set_state(new_state)
 	audio_state.set_state(new_state)
+
+	for group, value in pairs(audio_state.get_state().groups) do
+		sound.set_group_gain(group, audio_internal.to_engine_gain(value))
+	end
 end
 
 
----Reset the state to default and clear all runtime data. The registered sounds and the module timer are kept
+---Reset the state to default and clear all runtime data. The registered sounds and the audio host are kept
 function M.reset_state()
 	audio_state.reset()
 	audio_internal.reset_runtime()
@@ -193,7 +211,7 @@ function M.play_index(id, index, gain)
 end
 
 
----Schedule the sound to play after the delay. Uses an internal remaining-time counter on the module tick, not a separate timer
+---Schedule the sound to play after the delay. Uses an internal remaining-time counter on the `audio.script` update, not a separate timer
 ---		local handle = audio.play_delay("click", 0.5)
 ---		local handle = audio.play_delay("coin", 1, 0.5)
 ---@param id string The sound id from the sounds config
@@ -278,14 +296,7 @@ function M.fade(id, target_gain, time)
 	end
 
 	local target = audio_internal.to_engine_gain(audio_internal.clamp01(target_gain))
-	if not time or time <= 0 then
-		runtime.fades[id] = nil
-		audio_internal.set_sound_gain_engine(id, target)
-		return
-	end
-
-	local step = math.abs(target - from) * audio_internal.get_update_dt() / time
-	if step <= 0 then
+	if not time or time <= 0 or from == target then
 		runtime.fades[id] = nil
 		audio_internal.set_sound_gain_engine(id, target)
 		return
@@ -294,7 +305,7 @@ function M.fade(id, target_gain, time)
 	runtime.fades[id] = {
 		value = from,
 		target = target,
-		step = step,
+		remaining = time,
 	}
 end
 

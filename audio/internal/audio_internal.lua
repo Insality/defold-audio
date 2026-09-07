@@ -1,12 +1,12 @@
 local logger = require("audio.internal.audio_logger")
 local audio_state = require("audio.internal.audio_state")
 
-local UPDATE_DT = 1 / 60
+local MSG_PLAY = hash("audio_play")
 
 ---@class audio.internal.fade
 ---@field value number
 ---@field target number
----@field step number
+---@field remaining number
 
 ---@class audio.internal.delayed_play
 ---@field id string
@@ -15,7 +15,7 @@ local UPDATE_DT = 1 / 60
 
 ---The sound config, used to register the sound in the audio module
 ---@class audio.sound
----@field url string|string[] The sound component url or the list of urls to pick a random one. Relative urls like `/sounds#click` are resolved in the collection where `audio.init` or `audio.add_sounds` was called
+---@field url string|string[] The sound component url or the list of urls to pick a random one. Relative urls like `/sounds#click` are resolved in the collection where `audio.add_sounds` was called
 ---@field random_pitch number|nil The random pitch in range [0 .. 1]. The sound speed will be randomized in range [1 - random_pitch .. 1 + random_pitch]
 ---@field play_cooldown number|nil The minimum time in seconds between the sound plays. Default is 4/60. Set 0 to disable
 ---@field max_instances number|nil The maximum number of simultaneously playing instances. The oldest instances are stopped on overflow
@@ -24,8 +24,8 @@ local UPDATE_DT = 1 / 60
 ---@field sounds table<string, audio.sound>
 ---@field fades table<string, audio.internal.fade>
 ---@field delayed_plays table<number, audio.internal.delayed_play>
+---@field host_url url|nil
 ---@field next_delay_handle number
----@field update_timer number|nil
 ---@field last_gains table<string, number>
 ---@field last_play_time table<string, number>
 ---@field playing table<string, number>
@@ -33,15 +33,18 @@ local UPDATE_DT = 1 / 60
 ---@field props table<string, number>
 
 ---@class audio.internal.api
+---@field MSG_PLAY hash
 local M = {}
+
+M.MSG_PLAY = MSG_PLAY
 
 ---@type audio.internal.runtime
 local runtime = {
 	sounds = {},
 	fades = {},
 	delayed_plays = {},
+	host_url = nil,
 	next_delay_handle = 1,
-	update_timer = nil,
 	last_gains = {},
 	last_play_time = {},
 	playing = {},
@@ -123,14 +126,6 @@ function M.get_sound_config(id)
 end
 
 
-function M.stop_update_timer()
-	if runtime.update_timer then
-		timer.cancel(runtime.update_timer)
-		runtime.update_timer = nil
-	end
-end
-
-
 ---@param id string
 ---@param engine_gain number
 function M.set_sound_gain_engine(id, engine_gain)
@@ -147,19 +142,18 @@ function M.set_sound_gain_engine(id, engine_gain)
 end
 
 
-function M.update_fades()
+---@param dt number
+function M.update_fades(dt)
 	for id, fade in pairs(runtime.fades) do
-		if fade.value < fade.target then
-			fade.value = math.min(fade.target, fade.value + fade.step)
-		elseif fade.value > fade.target then
-			fade.value = math.max(fade.target, fade.value - fade.step)
+		if dt >= fade.remaining then
+			fade.value = fade.target
+			runtime.fades[id] = nil
+		else
+			fade.value = fade.value + (fade.target - fade.value) * (dt / fade.remaining)
+			fade.remaining = fade.remaining - dt
 		end
 
 		M.set_sound_gain_engine(id, fade.value)
-
-		if fade.value == fade.target then
-			runtime.fades[id] = nil
-		end
 	end
 end
 
@@ -191,18 +185,57 @@ function M.cancel_delayed_play(handle)
 end
 
 
----Create the single update loop for the whole module. It's created on the audio.init call,
----so the timer belongs to the script instance which initialized the module
----@param callback fun()
-function M.create_update_timer(callback)
-	M.stop_update_timer()
-	runtime.update_timer = timer.delay(UPDATE_DT, true, callback)
+---@param url url|string|hash
+function M.bind_host(url)
+	runtime.host_url = url
+end
+
+
+---Clear the host if it matches the url. Called from `audio.script` final
+---@param url url|string|hash|nil
+function M.unbind_host(url)
+	if url ~= nil and runtime.host_url ~= nil and tostring(runtime.host_url) ~= tostring(url) then
+		return
+	end
+
+	runtime.host_url = nil
+end
+
+
+function M.has_host()
+	return runtime.host_url ~= nil
+end
+
+
+---@param play table
+function M.request_play(play)
+	msg.post(runtime.host_url, MSG_PLAY, play)
+end
+
+
+---@param play table
+function M.handle_play(play)
+	if (runtime.playing_generation[play.id] or 0) ~= play.generation then
+		return
+	end
+
+	runtime.props.gain = play.gain
+	runtime.props.speed = play.speed
+	local id = play.id
+	local generation = play.generation
+	sound.play(play.url, runtime.props, function()
+		if (runtime.playing_generation[id] or 0) ~= generation then
+			return
+		end
+		local current_instances = runtime.playing[id] or 0
+		runtime.playing[id] = math.max(0, current_instances - 1)
+	end)
 end
 
 
 ---Resolve the url string to the full url in the current script context. It makes the sound url
 ---independent from the place it is played from, since the delayed plays and fades are processed
----in the context of the script which created the module timer
+---in the audio host script
 ---@param url string|hash|url
 ---@return hash|string|url
 local function resolve_url(url)
@@ -271,12 +304,6 @@ end
 
 
 ---@return number
-function M.get_update_dt()
-	return UPDATE_DT
-end
-
-
----@return number
 function M.get_sounds_count()
 	return M.count_table_entries(runtime.sounds)
 end
@@ -294,14 +321,18 @@ function M.count_table_entries(t)
 end
 
 
----Clear the runtime data. The update timer is kept, it's managed by the audio.init call
+---Clear the runtime data. The registered sounds and the audio host are kept.
+---In-flight play messages are invalidated by bumping the generation of every registered sound
 function M.reset_runtime()
 	runtime.fades = {}
 	runtime.delayed_plays = {}
 	runtime.last_gains = {}
 	runtime.last_play_time = {}
 	runtime.playing = {}
-	runtime.playing_generation = {}
+
+	for id in pairs(runtime.sounds) do
+		runtime.playing_generation[id] = (runtime.playing_generation[id] or 0) + 1
+	end
 end
 
 

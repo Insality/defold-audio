@@ -31,13 +31,17 @@ Check the [**HTML5 version**](https://insality.github.io/defold-audio/) of the e
 
 Open your `game.project` file and add the following line to the dependencies field under the project section:
 
-**[Defold Audio](https://github.com/Insality/defold-audio/archive/refs/tags/2.zip)**
+**[Defold Audio](https://github.com/Insality/defold-audio/archive/refs/tags/3.zip)**
 
 ```
-https://github.com/Insality/defold-audio/archive/refs/tags/2.zip
+https://github.com/Insality/defold-audio/archive/refs/tags/3.zip
 ```
 
 After that, select `Project ▸ Fetch Libraries` to update [library dependencies]((https://defold.com/manuals/libraries/#setting-up-library-dependencies)). This happens automatically whenever you open a project so you will only need to do this if the dependencies change without re-opening the project.
+
+Add `audio.script` to a game object in the collection that should own the playback. It can be the loader, a bootstrap collection, or the same game object as the sound components. This script starts the sounds, fades and delayed plays, so keep it loaded while you need audio.
+
+You can skip `audio.script` and call `audio.init`, `audio.update`, `audio.final` and `audio.on_message` from your own persistent script instead.
 
 ### Library Size
 
@@ -51,12 +55,12 @@ After that, select `Project ▸ Fetch Libraries` to update [library dependencies
 
 ## Basic Usage
 
-Place the sound components in a persistent collection (for example at your loader) and describe them in the sounds config. Prefer full URLs with the socket name, so playback works from any script:
+Place the sound components in a persistent collection and add `audio.script` to a game object there. Register the sounds from your scripts. Prefer full URLs with the socket name, so playback works from any script:
 
 ```lua
 local audio = require("audio.audio")
 
-audio.init({
+audio.add_sounds({
 	click = {
 		url = "main:/sounds#click",
 	},
@@ -109,9 +113,9 @@ Each sound is registered with the `audio.sound` config:
 The sound group is set in the sound component itself (the `group` field of the `.sound` file). The module manages the group gains and keeps them in the state, so they can be saved between the game sessions:
 
 ```lua
--- Restore the previously saved gains before the init
+-- Restore the previously saved gains
 audio.set_state(loaded_state)
-audio.init(sounds)
+audio.add_sounds(sounds)
 
 audio.set_gain("music", 0.5)
 audio.get_gain("music") --> 0.5
@@ -122,9 +126,11 @@ saver.bind_save_state("audio", audio.get_state())
 
 > **Note:** The gain is linear in range `[0 .. 1]`, while the engine gain is not. The module converts the linear gain to the engine one, so the `0.5` gain sounds twice quieter, as the player expects.
 
-> **Note:** The `audio.init` creates a single `timer.delay` to process all the fades and delayed plays. Call the init from a persistent script, for example from your loader, so they keep working while collections are loaded and unloaded.
+> **Note:** Place `audio.script` on a game object in the collection that should own the playback. It processes the fades, delayed plays and starts the sounds, so keep it loaded while you need audio.
 
-> **Note:** The sound urls are resolved once, in the collection of the script which called `audio.init`. So the relative urls like `/sounds#click` work the same from any place they are played from. The full urls with the socket (`main:/sounds#click`) are not affected by the place of the `audio.init` call at all.
+> **Note:** The sounds are started in `audio.script`. The `sound.play` completion callback is delivered to the script which calls it, so the sounds played directly from the game objects and gui which are deleted before the sound ends make the engine spam the `Instance '/collection0/root' could not be found when dispatching message 'sound_done'` errors. The module posts the play to `audio.script` instead.
+
+> **Note:** The sound urls are resolved once, in the collection of the script which called `audio.add_sounds`. So the relative urls like `/sounds#click` work the same from any place they are played from. The full urls with the socket (`main:/sounds#click`) are not affected by the place of the `audio.add_sounds` call at all.
 
 > **Note:** If the sounds are placed inside a collection loaded by the collection proxy, register them with `audio.add_sounds` from a script inside that collection, so their relative urls are resolved in the correct socket:
 > ```lua
@@ -142,7 +148,6 @@ saver.bind_save_state("audio", audio.get_state())
 local audio = require("audio.audio")
 
 -- Setup
-audio.init([sounds])
 audio.add_sounds(sounds)
 audio.set_logger([logger_instance])
 
@@ -200,6 +205,16 @@ For any issues, questions, or suggestions, please [create an issue](https://gith
 	- The full urls with the socket (`main:/sounds#click`) are not affected
 - Add `audio.add_sounds` function to register the additional sounds after the init
 	- Use it to register the sounds which are placed inside a collection loaded by the collection proxy, so their relative urls are resolved in the correct socket
+
+### **V3**
+- Add `audio.script`. Place it on a game object in the collection that should own the playback. It calls `audio.init` / `audio.update` / `audio.final` and starts the sounds, so `sound_done` is never delivered to the deleted game objects and gui
+- Register sounds with `audio.add_sounds` from your scripts. The `audio.init` no longer takes the sounds config
+- Sound plays and fading are processed in the `audio.script`
+- The group gains from `audio.set_state` are applied to the engine immediately
+- Migration from V2:
+	- Add `audio.script` to a persistent game object
+	- Replace `audio.init(sounds)` with `audio.add_sounds(sounds)`
+	- `audio.set_state` can be called at any time, the group gains are applied immediately
 
 </details>
 
