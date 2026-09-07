@@ -21,7 +21,7 @@ return function()
 			audio_internal = require("audio.internal.audio_internal")
 			audio.set_logger(nil)
 			audio.reset_state()
-			audio.init(SOUNDS)
+			audio.add_sounds(SOUNDS)
 		end)
 
 		after(function()
@@ -70,7 +70,7 @@ return function()
 
 		it("Should restore the group gains from the state", function()
 			audio.set_state({ groups = { music = 0.4, sfx = 0.6 } })
-			audio.init(SOUNDS)
+			audio.init()
 
 			assert(audio.get_gain("music") == 0.4)
 			assert(audio.get_gain("sfx") == 0.6)

@@ -1,0 +1,17 @@
+local audio = require("audio.audio")
+
+function init(self)
+	audio.init()
+end
+
+function final(self)
+	audio.final()
+end
+
+function update(self, dt)
+	audio.update(dt)
+end
+
+function on_message(self, message_id, message)
+	audio.on_message(message_id, message)
+end

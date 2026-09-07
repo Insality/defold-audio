@@ -21,7 +21,7 @@ return function()
 			audio_internal = require("audio.internal.audio_internal")
 			audio.set_logger(nil)
 			audio.reset_state()
-			audio.init(SOUNDS)
+			audio.add_sounds(SOUNDS)
 		end)
 
 		after(function()
@@ -41,11 +41,11 @@ return function()
 			local handle = audio.play_delay("click", 2 / 60)
 			local runtime = audio_internal.get_runtime()
 
-			audio.update()
+			audio.update(1 / 60)
 			assert(runtime.delayed_plays[handle] ~= nil)
 			assert(not audio.is_playing("click"))
 
-			audio.update()
+			audio.update(1 / 60)
 			assert(runtime.delayed_plays[handle] == nil)
 			assert(audio.is_playing("click"))
 		end)
@@ -57,9 +57,7 @@ return function()
 			local runtime = audio_internal.get_runtime()
 			assert(runtime.delayed_plays[handle] == nil)
 
-			for _ = 1, 120 do
-				audio.update()
-			end
+			audio.update(2)
 
 			assert(not audio.is_playing("click"))
 		end)
@@ -103,13 +101,13 @@ return function()
 			local click_handle = audio.play_delay("click", 1 / 60)
 			local coin_handle = audio.play_delay("coin", 3 / 60)
 
-			audio.update()
+			audio.update(1 / 60)
 			assert(audio.is_playing("click"))
 			assert(not audio.is_playing("coin"))
 
 			audio.cancel_play_delay(coin_handle)
-			audio.update()
-			audio.update()
+			audio.update(1 / 60)
+			audio.update(1 / 60)
 
 			assert(not audio.is_playing("coin"))
 			assert(click_handle ~= coin_handle)

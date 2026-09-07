@@ -30,7 +30,7 @@ return function()
 			audio_internal = require("audio.internal.audio_internal")
 			audio.set_logger(nil)
 			audio.reset_state()
-			audio.init(SOUNDS)
+			audio.add_sounds(SOUNDS)
 		end)
 
 		after(function()

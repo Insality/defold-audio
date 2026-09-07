@@ -15,7 +15,7 @@ Here is the full description of the sound config:
 ---@field max_instances number|nil The maximum number of simultaneously playing instances. The oldest instances are stopped on overflow
 ```
 
-Keep the config in a separate file and require it in the place where you init the module. Prefer full urls with the socket name, so playback works from any script:
+Keep the config in a separate file and require it in the place where you register the sounds. Prefer full urls with the socket name, so playback works from any script:
 
 ```lua
 -- game/sounds.lua
@@ -30,7 +30,7 @@ return {
 ```lua
 local audio = require("audio.audio")
 
-audio.init(require("game.sounds"))
+audio.add_sounds(require("game.sounds"))
 ```
 
 
@@ -41,11 +41,12 @@ The module plays the sound components, so they should exist in a loaded persiste
 1. Add the sound files (`.wav` or `.ogg`) to your project.
 2. Create the `.sound` component for each sound file and set the `group` field, for example `sfx` or `music`.
 3. Add all sound components to a single game object, for example `sounds`, in your bootstrap collection.
-4. Use the full component urls in the sounds config: `main:/sounds#click`.
+4. Add `audio.script` to that game object, or to another game object in a collection that stays loaded while you need audio.
+5. Use the full component urls in the sounds config: `main:/sounds#click`.
 
 Keeping all sounds in one persistent game object is the simplest way, so any script in the game can play them by id.
 
-Relative urls like `/sounds#click` also work. They are resolved once, at the moment the sound is registered, in the collection of the script which called `audio.init`. So the sound is played from the same component, no matter which script calls `audio.play`.
+Relative urls like `/sounds#click` also work. They are resolved once, at the moment the sound is registered, in the collection of the script which called `audio.add_sounds`. So the sound is played from the same component, no matter which script calls `audio.play`.
 
 If some sounds are placed inside a collection loaded by the collection proxy, register them with `audio.add_sounds` from a script inside that collection, so their relative urls are resolved in the correct socket:
 
@@ -59,7 +60,7 @@ end
 
 ## Save the audio state
 
-The state contains the gain of all changed sound groups. Load it **before** the `audio.init` call, so the gains will be applied to the engine on the init.
+The state contains the gain of all changed sound groups. The gains are applied to the engine when `audio.set_state` or `audio.init` is called.
 
 For this you can use the [Defold Saver](https://github.com/Insality/defold-saver) module.
 
@@ -74,7 +75,7 @@ function init(self)
 	local audio_state = saver.bind_save_state("audio", audio.get_state())
 	audio.set_state(audio_state)
 
-	audio.init(require("game.sounds"))
+	audio.add_sounds(require("game.sounds"))
 end
 ```
 
@@ -127,7 +128,7 @@ end
 
 The `audio.stop` cancels the current fade of the sound, so the music can be stopped instantly at any moment.
 
-> **Note:** All the fades and delayed plays are processed by a single `timer.delay`, created inside the `audio.init` call. The `audio.fade` and `audio.play_delay` calls only change the numbers, so they will finish even if the game object which started them is deleted. Call the `audio.init` from a persistent script, for example from your loader. Relative sound urls for delay/fade are also resolved in that collection, so prefer full urls with the socket (`main:/sounds#music`).
+> **Note:** Place `audio.script` on a game object in the collection that should own the playback. It processes the fades, delayed plays and starts the sounds, so they keep working even if the game object which called `audio.play` is deleted. Relative sound urls are resolved in the collection of the `audio.add_sounds` call, so prefer full urls with the socket (`main:/sounds#music`).
 
 
 ## Sound variations
@@ -135,7 +136,7 @@ The `audio.stop` cancels the current fade of the sound, so the music can be stop
 The repetitive sounds are the fastest way to annoy the player. Use the list of urls and the random pitch to make them different every time:
 
 ```lua
-audio.init({
+audio.add_sounds({
 	footstep = {
 		url = { "main:/sounds#footstep_1", "main:/sounds#footstep_2", "main:/sounds#footstep_3" },
 		random_pitch = 0.15,
@@ -150,7 +151,7 @@ audio.play("footstep")
 If you need the exact sound from the list, use the `audio.play_index`. It's useful when the sound depends on the game state, for example the combo counter:
 
 ```lua
-audio.init({
+audio.add_sounds({
 	combo = {
 		url = { "main:/sounds#combo_1", "main:/sounds#combo_2", "main:/sounds#combo_3" },
 		play_cooldown = 0,
@@ -170,7 +171,7 @@ Two configs are used to keep the sound mix clean:
 - `max_instances` - restart the sound instead of stacking the new instance over the previous ones.
 
 ```lua
-audio.init({
+audio.add_sounds({
 	-- The collected coins are played in a burst, keep only 3 of them at once
 	coin = {
 		url = "main:/sounds#coin",

@@ -8,6 +8,9 @@ Used to register sounds and manage their playback and gain.
 ## Functions
 
 - [init](#init)
+- [final](#final)
+- [update](#update)
+- [on_message](#on_message)
 - [add_sounds](#add_sounds)
 - [set_logger](#set_logger)
 - [get_state](#get_state)
@@ -34,26 +37,59 @@ Used to register sounds and manage their playback and gain.
 
 ---
 ```lua
-audio.init([sounds])
+audio.init()
 ```
 
  Setup
-Initialize the audio module with the sounds config and apply the current group gains.
-It creates the single module timer for fades and delayed plays, so call it from a persistent script, for example from your loader.
-The relative sound urls like `/sounds#click` are resolved in the collection of the calling script
-
-- **Parameters:**
-	- `[sounds]` *(table<string, audio.sound>|nil)*: Sound configs by sound id. Can be nil to init without sounds
+Initialize the audio host. Called by `audio.script`. Place that script on a game object
+in the collection that should own the playback. Register the sounds with `audio.add_sounds` from your scripts
 
 - **Example Usage:**
 
 ```lua
-audio.init(require("game.sounds"))
-audio.init({
-	click = { url = "main:/sounds#click" },
-	coin = { url = { "main:/sounds#coin_1", "main:/sounds#coin_2" }, random_pitch = 0.1 },
-})
+-- audio.script
+function init(self)
+	audio.init()
+end
+
+function update(self, dt)
+	audio.update(dt)
+end
 ```
+
+### final
+
+---
+```lua
+audio.final()
+```
+
+Clear the audio host if this script is the current one. Called by `audio.script` on final
+
+### update
+
+---
+```lua
+audio.update(dt)
+```
+
+Update the fades and delayed plays. Called by `audio.script`
+
+- **Parameters:**
+	- `dt` *(number)*: Frame delta time in seconds
+
+### on_message
+
+---
+```lua
+audio.on_message(message_id, message)
+```
+
+Handle the play messages posted to `audio.script`
+
+- **Parameters:**
+	- `message_id` *(hash)*
+	- `message` *(table)*
 
 ### add_sounds
 
@@ -62,7 +98,7 @@ audio.init({
 audio.add_sounds(sounds)
 ```
 
-Register the additional sounds after the `audio.init` call. The sound urls are resolved in the collection
+Register the additional sounds. The sound urls are resolved in the collection
 of the calling script, so it's the way to register the sounds which are placed inside a collection proxy
 
 - **Parameters:**
@@ -71,6 +107,7 @@ of the calling script, so it's the way to register the sounds which are placed i
 - **Example Usage:**
 
 ```lua
+audio.add_sounds(require("game.sounds"))
 audio.add_sounds(require("game.level_sounds"))
 ```
 
@@ -118,7 +155,7 @@ saver.bind_save_state("audio", audio.get_state())
 audio.set_state(new_state)
 ```
 
-Set the state (for deserialization). Call it before `audio.init` to restore the saved group gains
+Set the state (for deserialization). The group gains are applied to the engine immediately
 
 - **Parameters:**
 	- `new_state` *(audio.state)*: Previously saved state
@@ -127,7 +164,6 @@ Set the state (for deserialization). Call it before `audio.init` to restore the 
 
 ```lua
 audio.set_state(loaded_state)
-audio.init(require("game.sounds"))
 ```
 
 ### reset_state
@@ -137,7 +173,7 @@ audio.init(require("game.sounds"))
 audio.reset_state()
 ```
 
-Reset the state to default and clear all runtime data. The registered sounds and the module timer are kept
+Reset the state to default and clear all runtime data. The registered sounds and the audio host are kept
 
 ### play
 
@@ -147,7 +183,8 @@ audio.play(id, [gain])
 ```
 
  Playback
-Play the sound by id. If the sound config contains a list of urls, a random one will be picked
+Play the sound by id. If the sound config contains a list of urls, a random one will be picked.
+The sound is started in `audio.script`
 
 - **Parameters:**
 	- `id` *(string)*: The sound id from the sounds config
@@ -167,7 +204,8 @@ audio.play("coin", 0.5)
 audio.play_index(id, index, [gain])
 ```
 
-Play the exact sound from the sound config urls list by index
+Play the exact sound from the sound config urls list by index.
+The sound is started in `audio.script`
 
 - **Parameters:**
 	- `id` *(string)*: The sound id from the sounds config
@@ -188,7 +226,7 @@ audio.play_index("footstep", 2, 0.5)
 audio.play_delay(id, delay, [gain])
 ```
 
-Schedule the sound to play after the delay. Uses an internal remaining-time counter on the module tick, not a separate timer
+Schedule the sound to play after the delay. Uses an internal remaining-time counter on the `audio.script` update, not a separate timer
 
 - **Parameters:**
 	- `id` *(string)*: The sound id from the sounds config
@@ -343,7 +381,7 @@ The sound config, used to register the sound in the audio module
 ```
 
 - **Fields:**
-	- `url` *(string|string[])*: The sound component url or the list of urls to pick a random one. Relative urls like `/sounds#click` are resolved in the collection where `audio.init` or `audio.add_sounds` was called
+	- `url` *(string|string[])*: The sound component url or the list of urls to pick a random one. Relative urls like `/sounds#click` are resolved in the collection where `audio.add_sounds` was called
 	- `random_pitch` *(number|nil)*: The random pitch in range [0 .. 1]. The sound speed will be randomized in range [1 - random_pitch .. 1 + random_pitch]
 	- `play_cooldown` *(number|nil)*: The minimum time in seconds between the sound plays. Default is 4/60. Set 0 to disable
 	- `max_instances` *(number|nil)*: The maximum number of simultaneously playing instances. The oldest instances are stopped on overflow

@@ -21,60 +21,36 @@ return function()
 			audio_internal = require("audio.internal.audio_internal")
 			audio.set_logger(nil)
 			audio.reset_state()
-			audio.init(SOUNDS)
+			audio.add_sounds(SOUNDS)
+			audio.init()
 		end)
 
 		after(function()
 			audio.reset_state()
 		end)
 
-		it("Should create the single update timer on the init", function()
-			local runtime = audio_internal.get_runtime()
-			assert(runtime.update_timer ~= nil)
-
-			local update_timer = runtime.update_timer
-			audio.play("music", 1)
-			audio.fade("music", 0, 1)
-			audio_internal.update_fades()
-
-			-- The fades are only the numbers, the timer is never touched
-			assert(runtime.update_timer == update_timer)
-		end)
-
-		it("Should keep the update timer after the fade is finished", function()
-			local runtime = audio_internal.get_runtime()
-			local update_timer = runtime.update_timer
-
-			audio.play("music", 1)
-			audio.fade("music", 0, 1)
-
-			for _ = 1, 120 do
-				audio_internal.update_fades()
-			end
-
-			assert(runtime.fades["music"] == nil)
-			assert(runtime.update_timer == update_timer)
-		end)
-
 		it("Should keep the fades working after the next init", function()
-			local runtime = audio_internal.get_runtime()
-
-			audio.init(SOUNDS)
-			assert(runtime.update_timer ~= nil)
+			audio.init()
 
 			audio.play("music", 1)
 			audio.fade("music", 0, 1)
-			audio_internal.update_fades()
+			audio.update(1 / 60)
 
+			local runtime = audio_internal.get_runtime()
 			assert(runtime.last_gains["music"] < 1)
+			assert(runtime.fades["music"] ~= nil)
 		end)
 
-		it("Should keep the update timer on the reset state", function()
-			local runtime = audio_internal.get_runtime()
-			local update_timer = runtime.update_timer
-
+		it("Should keep the fades working after the reset state", function()
 			audio.reset_state()
-			assert(runtime.update_timer == update_timer)
+
+			audio.play("music", 1)
+			audio.fade("music", 0, 1)
+			audio.update(1 / 60)
+
+			local runtime = audio_internal.get_runtime()
+			assert(runtime.last_gains["music"] < 1)
+			assert(runtime.fades["music"] ~= nil)
 		end)
 
 		it("Should set the gain instantly without the fade time", function()
@@ -95,6 +71,7 @@ return function()
 			assert(fade ~= nil)
 			assert(fade.target == 0)
 			assert(fade.value == audio_internal.to_engine_gain(1))
+			assert(fade.remaining == 1)
 		end)
 
 		it("Should change the gain on the fade update", function()
@@ -103,9 +80,10 @@ return function()
 			audio.play("music", 1)
 			audio.fade("music", 0, 1)
 
-			audio_internal.update_fades()
+			audio.update(1 / 60)
 			assert(runtime.last_gains["music"] < 1)
 			assert(runtime.last_gains["music"] > 0)
+			assert(runtime.fades["music"].remaining < 1)
 		end)
 
 		it("Should finish the fade at the target gain", function()
@@ -113,14 +91,25 @@ return function()
 
 			audio.play("music", 1)
 			audio.fade("music", 0, 1)
-
-			-- The fade step is calculated for 60 updates per second
-			for _ = 1, 120 do
-				audio_internal.update_fades()
-			end
+			audio.update(1)
 
 			assert(runtime.last_gains["music"] == 0)
 			assert(runtime.fades["music"] == nil)
+		end)
+
+		it("Should finish the fade across several updates", function()
+			local runtime = audio_internal.get_runtime()
+
+			audio.play("music", 1)
+			audio.fade("music", 0, 1)
+
+			audio.update(0.5)
+			assert(runtime.fades["music"] ~= nil)
+			assert(runtime.last_gains["music"] == 0.5)
+
+			audio.update(0.5)
+			assert(runtime.fades["music"] == nil)
+			assert(runtime.last_gains["music"] == 0)
 		end)
 
 		it("Should fade in the sound", function()
@@ -128,10 +117,7 @@ return function()
 
 			audio.play("music", 0)
 			audio.fade("music", 1, 1)
-
-			for _ = 1, 120 do
-				audio_internal.update_fades()
-			end
+			audio.update(1)
 
 			assert(runtime.last_gains["music"] == audio_internal.to_engine_gain(1))
 		end)
@@ -152,10 +138,7 @@ return function()
 
 			audio.play("coin", 1)
 			audio.fade("coin", 0.5, 1)
-
-			for _ = 1, 120 do
-				audio_internal.update_fades()
-			end
+			audio.update(1)
 
 			assert(runtime.last_gains["coin"] == audio_internal.to_engine_gain(0.5))
 		end)
