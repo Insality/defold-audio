@@ -207,7 +207,7 @@ For any issues, questions, or suggestions, please [create an issue](https://gith
 ### **V3**
 - Add `audio.script`. Place it on a game object in the collection that should own the playback. It calls `audio.init` / `audio.update` / `audio.final` and starts the sounds, so `sound_done` is never delivered to the deleted game objects and gui
 - Register sounds with `audio.add_sounds` from your scripts. The `audio.init` no longer takes the sounds config
-- Fades and delayed plays are processed in the `audio.script` update with the real frame `dt`, not a module timer
+- Sound plays and fading are processed in the `audio.script`
 - The group gains from `audio.set_state` are applied to the engine immediately
 
 </details>
