@@ -58,6 +58,33 @@ end
 ```
 
 
+## Register the sounds of a window
+
+A window, a level or any other temporary part of the game can register its own sounds on init and remove them on final. So the sounds config contains only the sounds which exist right now:
+
+```lua
+local WINDOW_SOUNDS = {
+	window_open = {
+		url = "/window#open",
+	},
+	window_reward = {
+		url = "/window#reward",
+	},
+}
+
+function init(self)
+	audio.add_sounds(WINDOW_SOUNDS)
+	audio.play("window_open")
+end
+
+function final(self)
+	audio.remove_sounds(WINDOW_SOUNDS)
+end
+```
+
+Pass the same table to `audio.remove_sounds`. If another window registered the sound with the same id after this one, its sound is kept. The `audio.remove_sounds` cancels the fades and delayed plays of the removed sounds. The playing sounds are not stopped, call `audio.stop` before, if the sounds should stop earlier.
+
+
 ## Save the audio state
 
 The state contains the gain of all changed sound groups. The gains are applied to the engine when `audio.set_state` or `audio.init` is called.
@@ -84,16 +111,16 @@ The `audio.set_gain` calls will change the bound state table, so the gains will 
 
 ## Sound settings UI
 
-The gain is linear in the `[0 .. 1]` range, so it can be used directly in the settings sliders:
+The gain is the same as in Defold, in the `[0 .. 1]` range. With the **Use Linear Gain** project setting enabled (the Defold default), the loudness changes mostly at the bottom of the slider. Square the slider value to make the slider feel even:
 
 ```lua
 local audio = require("audio.audio")
 
 -- Init the slider with the current gain
-slider:set_value(audio.get_gain("music"))
+slider:set_value(math.sqrt(audio.get_gain("music")))
 
 slider.on_change_value:subscribe(function(value)
-	audio.set_gain("music", value)
+	audio.set_gain("music", value * value)
 end)
 ```
 

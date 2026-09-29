@@ -12,6 +12,7 @@ Used to register sounds and manage their playback and gain.
 - [update](#update)
 - [on_message](#on_message)
 - [add_sounds](#add_sounds)
+- [remove_sounds](#remove_sounds)
 - [set_logger](#set_logger)
 - [get_state](#get_state)
 - [set_state](#set_state)
@@ -111,6 +112,27 @@ audio.add_sounds(require("game.sounds"))
 audio.add_sounds(require("game.level_sounds"))
 ```
 
+### remove_sounds
+
+---
+```lua
+audio.remove_sounds(sounds)
+```
+
+Unregister the sounds, previously added with `audio.add_sounds`. Pass the same sounds table.
+The sound replaced by another `audio.add_sounds` call with the same id is kept.
+The fades and delayed plays of the removed sounds are canceled. The playing sounds are not stopped,
+call `audio.stop` before, if the sounds should stop now
+
+- **Parameters:**
+	- `sounds` *(table<string, audio.sound>)*: The same sounds table, passed to `audio.add_sounds`
+
+- **Example Usage:**
+
+```lua
+audio.remove_sounds(require("game.window_sounds"))
+```
+
 ### set_logger
 
 ---
@@ -188,7 +210,7 @@ The sound is started in `audio.script`
 
 - **Parameters:**
 	- `id` *(string)*: The sound id from the sounds config
-	- `[gain]` *(number|nil)*: Linear gain in range [0 .. 1]. Default is the last used gain of this sound
+	- `[gain]` *(number|nil)*: Gain in range [0 .. 1]. Default is the last used gain of this sound
 
 - **Example Usage:**
 
@@ -210,7 +232,7 @@ The sound is started in `audio.script`
 - **Parameters:**
 	- `id` *(string)*: The sound id from the sounds config
 	- `index` *(number)*: Index of the url in the sound config urls list, starts from 1
-	- `[gain]` *(number|nil)*: Linear gain in range [0 .. 1]. Default is the last used gain of this sound
+	- `[gain]` *(number|nil)*: Gain in range [0 .. 1]. Default is the last used gain of this sound
 
 - **Example Usage:**
 
@@ -231,7 +253,7 @@ Schedule the sound to play after the delay. Uses an internal remaining-time coun
 - **Parameters:**
 	- `id` *(string)*: The sound id from the sounds config
 	- `delay` *(number)*: Delay in seconds before the sound is played
-	- `[gain]` *(number|nil)*: Linear gain in range [0 .. 1]. Default is the last used gain of this sound
+	- `[gain]` *(number|nil)*: Gain in range [0 .. 1]. Default is the last used gain of this sound
 
 - **Returns:**
 	- `handle` *(number|nil)*: Handle to cancel the delayed play with `audio.cancel_play_delay`. Nil if the sound is not registered or the delay is zero or negative
@@ -314,7 +336,7 @@ Fade the sound gain to the target value over time. Useful to fade in and out the
 
 - **Parameters:**
 	- `id` *(string)*: The sound id from the sounds config
-	- `target_gain` *(number)*: Target linear gain in range [0 .. 1]
+	- `target_gain` *(number)*: Target gain in range [0 .. 1]
 	- `[time]` *(number|nil)*: Fade time in seconds. If not set, the gain is applied instantly
 
 - **Example Usage:**
@@ -328,15 +350,15 @@ audio.fade("music", 1, 2) -- Fade in the music in 2 seconds
 
 ---
 ```lua
-audio.set_gain(group, [linear_value])
+audio.set_gain(group, [gain])
 ```
 
  Sound Groups
-Set the linear gain of the sound group. The value is stored in the state
+Set the gain of the sound group. The value is stored in the state
 
 - **Parameters:**
 	- `group` *(string)*: The sound group name, as it set in the sound components
-	- `[linear_value]` *(number|nil)*: Linear gain in range [0 .. 1]. Default is 1
+	- `[gain]` *(number|nil)*: Gain in range [0 .. 1]. Default is 1
 
 - **Example Usage:**
 
@@ -352,13 +374,13 @@ audio.set_gain("sfx", 0.8)
 audio.get_gain(group)
 ```
 
-Get the linear gain of the sound group
+Get the gain of the sound group
 
 - **Parameters:**
 	- `group` *(string)*: The sound group name, as it set in the sound components
 
 - **Returns:**
-	- `gain` *(number)*: Linear gain in range [0 .. 1]. Default is 1
+	- `gain` *(number)*: Gain in range [0 .. 1]. Default is 1
 
 - **Example Usage:**
 
@@ -397,4 +419,4 @@ The audio module state, can be saved and loaded between game sessions
 ```
 
 - **Fields:**
-	- `groups` *(table<string, number>)*: The linear gain of the sound groups by group name
+	- `groups` *(table<string, number>)*: The gain of the sound groups by group name

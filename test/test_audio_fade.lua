@@ -70,7 +70,7 @@ return function()
 			local fade = runtime.fades["music"]
 			assert(fade ~= nil)
 			assert(fade.target == 0)
-			assert(fade.value == audio_internal.to_engine_gain(1))
+			assert(fade.value == 1)
 			assert(fade.remaining == 1)
 		end)
 
@@ -119,7 +119,7 @@ return function()
 			audio.fade("music", 1, 1)
 			audio.update(1)
 
-			assert(runtime.last_gains["music"] == audio_internal.to_engine_gain(1))
+			assert(runtime.last_gains["music"] == 1)
 		end)
 
 		it("Should stop the fade on the sound stop", function()
@@ -140,7 +140,7 @@ return function()
 			audio.fade("coin", 0.5, 1)
 			audio.update(1)
 
-			assert(runtime.last_gains["coin"] == audio_internal.to_engine_gain(0.5))
+			assert(runtime.last_gains["coin"] == 0.5)
 		end)
 
 		it("Should skip the fade for the unregistered sound", function()

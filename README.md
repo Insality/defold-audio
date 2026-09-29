@@ -31,10 +31,10 @@ Check the [**HTML5 version**](https://insality.github.io/defold-audio/) of the e
 
 Open your `game.project` file and add the following line to the dependencies field under the project section:
 
-**[Defold Audio](https://github.com/Insality/defold-audio/archive/refs/tags/3.zip)**
+**[Defold Audio](https://github.com/Insality/defold-audio/archive/refs/tags/4.zip)**
 
 ```
-https://github.com/Insality/defold-audio/archive/refs/tags/3.zip
+https://github.com/Insality/defold-audio/archive/refs/tags/4.zip
 ```
 
 After that, select `Project ▸ Fetch Libraries` to update [library dependencies]((https://defold.com/manuals/libraries/#setting-up-library-dependencies)). This happens automatically whenever you open a project so you will only need to do this if the dependencies change without re-opening the project.
@@ -124,7 +124,7 @@ audio.get_gain("music") --> 0.5
 saver.bind_save_state("audio", audio.get_state())
 ```
 
-> **Note:** The gain is linear in range `[0 .. 1]`, while the engine gain is not. The module converts the linear gain to the engine one, so the `0.5` gain sounds twice quieter, as the player expects.
+> **Note:** The gain is the same as in Defold, in range `[0 .. 1]`. It's multiplied with the gain of the sound component, set in the editor. How the gain is heard depends on the **Use Linear Gain** option in the [Sound project settings](https://defold.com/manuals/project-settings/#sound).
 
 > **Note:** Place `audio.script` on a game object in the collection that should own the playback. It processes the fades, delayed plays and starts the sounds, so keep it loaded while you need audio.
 
@@ -136,6 +136,10 @@ saver.bind_save_state("audio", audio.get_state())
 > ```lua
 > function init(self)
 > 	audio.add_sounds(require("game.level_sounds"))
+> end
+>
+> function final(self)
+> 	audio.remove_sounds(require("game.level_sounds"))
 > end
 > ```
 
@@ -149,6 +153,7 @@ local audio = require("audio.audio")
 
 -- Setup
 audio.add_sounds(sounds)
+audio.remove_sounds(sounds)
 audio.set_logger([logger_instance])
 
 -- Save and load state
@@ -166,7 +171,7 @@ audio.is_playing(id)
 audio.fade(id, target_gain, [time])
 
 -- Sound Groups
-audio.set_gain(group, [linear_value])
+audio.set_gain(group, [gain])
 audio.get_gain(group)
 ```
 
@@ -211,11 +216,17 @@ For any issues, questions, or suggestions, please [create an issue](https://gith
 - Register sounds with `audio.add_sounds` from your scripts. The `audio.init` no longer takes the sounds config
 - Sound plays and fading are processed in the `audio.script`
 - The group gains from `audio.set_state` are applied to the engine immediately
-- Fix the sound component gain, set in the editor, was ignored on the sound play
 - Migration from V2:
 	- Add `audio.script` to a persistent game object
 	- Replace `audio.init(sounds)` with `audio.add_sounds(sounds)`
 	- `audio.set_state` can be called at any time, the group gains are applied immediately
+
+### **V4**
+- Add `audio.remove_sounds` function to unregister the sounds, previously added with `audio.add_sounds`
+	- Use it to register the sounds of a window or a level on its init and remove them on its final
+- Fix the sound component gain, set in the editor, was ignored on the sound play
+- **Breaking:** The gain is not converted anymore, it's the same as in Defold. Previously the passed gain was squared: `audio.play("coin", 0.5)` played with the `0.25` gain, now with `0.5`. It's applied to `audio.play`, `audio.fade` and `audio.set_gain`, including the group gains in the saved state
+	- To keep the previous loudness, square the gain values: `0.5` -> `0.25`
 
 </details>
 
