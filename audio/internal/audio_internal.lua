@@ -22,6 +22,7 @@ local MSG_PLAY = hash("audio_play")
 
 ---@class audio.internal.runtime
 ---@field sounds table<string, audio.sound>
+---@field sound_sources table<string, audio.sound> The config tables passed to `add_sounds`, to remove only the own sounds
 ---@field fades table<string, audio.internal.fade>
 ---@field delayed_plays table<number, audio.internal.delayed_play>
 ---@field host_url url|nil
@@ -41,6 +42,7 @@ M.MSG_PLAY = MSG_PLAY
 ---@type audio.internal.runtime
 local runtime = {
 	sounds = {},
+	sound_sources = {},
 	fades = {},
 	delayed_plays = {},
 	host_url = nil,
@@ -213,8 +215,14 @@ function M.handle_play(play)
 		return
 	end
 
-	runtime.props.speed = play.speed
 	local id = play.id
+	if not runtime.sounds[id] then
+		-- The sound is removed before the host handled the play
+		runtime.playing[id] = math.max(0, (runtime.playing[id] or 0) - 1)
+		return
+	end
+
+	runtime.props.speed = play.speed
 	local generation = play.generation
 	sound.play(play.url, runtime.props, function()
 		if (runtime.playing_generation[id] or 0) ~= generation then
@@ -283,29 +291,34 @@ function M.add_sounds(sounds)
 
 	for id, sound_config in pairs(sounds) do
 		runtime.sounds[id] = resolve_sound_config(sound_config)
+		runtime.sound_sources[id] = sound_config
 	end
 end
 
 
----Unregister the sounds by the ids of the sounds table. The fades, delayed plays and the runtime data
----of these sounds are cleared. In-flight play messages are invalidated by bumping the sound generation
+---Unregister the sounds of the sounds table. The sound is removed only if it's registered with the same
+---config table, so the sound replaced by another `add_sounds` call is kept. The fades and delayed plays of
+---the removed sounds are canceled. The playing sounds are still tracked until they finish
 ---@param sounds table<string, audio.sound>|nil
 function M.remove_sounds(sounds)
 	if not sounds then
 		return
 	end
 
-	for id in pairs(sounds) do
-		runtime.sounds[id] = nil
-		runtime.fades[id] = nil
-		runtime.last_gains[id] = nil
-		runtime.last_play_time[id] = nil
-		runtime.playing[id] = nil
-		runtime.playing_generation[id] = (runtime.playing_generation[id] or 0) + 1
+	local removed = {}
+	for id, sound_config in pairs(sounds) do
+		if runtime.sound_sources[id] == sound_config then
+			removed[id] = true
+			runtime.sounds[id] = nil
+			runtime.sound_sources[id] = nil
+			runtime.fades[id] = nil
+			runtime.last_gains[id] = nil
+			runtime.last_play_time[id] = nil
+		end
 	end
 
 	for handle, delayed in pairs(runtime.delayed_plays) do
-		if sounds[delayed.id] then
+		if removed[delayed.id] then
 			runtime.delayed_plays[handle] = nil
 		end
 	end
@@ -315,6 +328,7 @@ end
 ---@param sounds table<string, audio.sound>|nil
 function M.set_sounds(sounds)
 	runtime.sounds = {}
+	runtime.sound_sources = {}
 	M.add_sounds(sounds)
 end
 

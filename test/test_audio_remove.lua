@@ -38,8 +38,8 @@ return function()
 
 			play_calls = {}
 			original_play = sound.play
-			sound.play = function(url)
-				table.insert(play_calls, url)
+			sound.play = function(url, props, callback)
+				table.insert(play_calls, { url = url, callback = callback })
 			end
 
 			original_post = msg.post
@@ -105,26 +105,48 @@ return function()
 		end)
 
 		it("Should skip the queued play of the removed sound", function()
-			msg.post = function()
+			local queued_play
+			msg.post = function(url, message_id, message)
 				-- Keep the play queued in the message and handle it later
+				queued_play = message
 			end
 
 			audio.play("coin")
+			assert(queued_play ~= nil)
 			assert(audio.is_playing("coin"))
 
-			local play = {
-				id = "coin",
-				url = audio_internal.get_sound_config("coin").url[1],
-				gain = 1,
-				speed = 1,
-				generation = 0,
-			}
-
 			audio.remove_sounds(WINDOW_SOUNDS)
-			audio_internal.handle_play(play)
+			audio_internal.handle_play(queued_play)
 
 			assert(#play_calls == 0)
 			assert(not audio.is_playing("coin"))
+		end)
+
+		it("Should keep tracking the playing sound after the remove", function()
+			audio.play("coin")
+			assert(#play_calls == 1)
+
+			audio.remove_sounds(WINDOW_SOUNDS)
+			assert(audio.is_playing("coin"))
+
+			play_calls[1].callback()
+			assert(not audio.is_playing("coin"))
+		end)
+
+		it("Should keep the sound replaced by another registration", function()
+			local other_sounds = {
+				coin = {
+					url = "/sounds#coin_1",
+					play_cooldown = 0,
+				},
+			}
+			audio.add_sounds(other_sounds)
+
+			audio.remove_sounds(WINDOW_SOUNDS)
+			assert(audio_internal.get_sound_config("coin") ~= nil)
+
+			audio.remove_sounds(other_sounds)
+			assert(audio_internal.get_sound_config("coin") == nil)
 		end)
 
 		it("Should play the sound after it's added again", function()

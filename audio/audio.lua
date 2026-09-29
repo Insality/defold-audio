@@ -142,10 +142,11 @@ end
 
 
 ---Unregister the sounds, previously added with `audio.add_sounds`. Pass the same sounds table.
----The fades and delayed plays of these sounds are canceled. The playing sounds are not stopped,
----they stop with their sound components. Call `audio.stop` before, if the sounds should stop now
+---The sound replaced by another `audio.add_sounds` call with the same id is kept.
+---The fades and delayed plays of the removed sounds are canceled. The playing sounds are not stopped,
+---call `audio.stop` before, if the sounds should stop now
 ---		audio.remove_sounds(require("game.window_sounds"))
----@param sounds table<string, audio.sound> Sound configs by sound id. Only the ids are used
+---@param sounds table<string, audio.sound> The same sounds table, passed to `audio.add_sounds`
 function M.remove_sounds(sounds)
 	audio_internal.remove_sounds(sounds)
 
