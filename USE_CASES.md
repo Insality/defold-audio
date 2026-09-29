@@ -82,7 +82,7 @@ function final(self)
 end
 ```
 
-The `audio.remove_sounds` cancels the fades and delayed plays of these sounds. The playing sounds are not stopped, they stop together with their sound components when the window is deleted. Call `audio.stop` before, if the sounds should stop earlier.
+Pass the same table to `audio.remove_sounds`. If another window registered the sound with the same id after this one, its sound is kept. The `audio.remove_sounds` cancels the fades and delayed plays of the removed sounds. The playing sounds are not stopped, call `audio.stop` before, if the sounds should stop earlier.
 
 
 ## Save the audio state
