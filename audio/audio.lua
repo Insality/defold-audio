@@ -46,11 +46,11 @@ local function play_sound(id, url, gain)
 		runtime.last_play_time[id] = now
 	end
 
-	local engine_gain = runtime.last_gains[id] or audio_internal.to_engine_gain(1)
+	local sound_gain = runtime.last_gains[id] or 1
 	local speed = 1
 
 	if gain ~= nil then
-		engine_gain = audio_internal.to_engine_gain(audio_internal.clamp01(gain))
+		sound_gain = audio_internal.clamp01(gain)
 	end
 
 	if sound_config.random_pitch and sound_config.random_pitch > 0 then
@@ -62,12 +62,12 @@ local function play_sound(id, url, gain)
 	audio_internal.request_play({
 		id = id,
 		url = url,
-		gain = engine_gain,
+		gain = sound_gain,
 		speed = speed,
 		generation = play_generation,
 	})
 
-	runtime.last_gains[id] = engine_gain
+	runtime.last_gains[id] = sound_gain
 end
 
 
@@ -101,7 +101,7 @@ function M.init()
 	audio_internal.bind_host(msg.url())
 
 	for group, value in pairs(audio_state.get_state().groups) do
-		sound.set_group_gain(group, audio_internal.to_engine_gain(value))
+		sound.set_group_gain(group, value)
 	end
 
 	logger:info("Audio module initialized", {
@@ -141,6 +141,20 @@ function M.add_sounds(sounds)
 end
 
 
+---Unregister the sounds, previously added with `audio.add_sounds`. Pass the same sounds table.
+---The fades and delayed plays of these sounds are canceled. The playing sounds are not stopped,
+---they stop with their sound components. Call `audio.stop` before, if the sounds should stop now
+---		audio.remove_sounds(require("game.window_sounds"))
+---@param sounds table<string, audio.sound> Sound configs by sound id. Only the ids are used
+function M.remove_sounds(sounds)
+	audio_internal.remove_sounds(sounds)
+
+	logger:info("Audio sounds removed", {
+		sounds = audio_internal.get_sounds_count(),
+	})
+end
+
+
 ---Customize the logging mechanism used by Audio module. You can use **Defold Log** library or provide a custom logger.
 ---		audio.set_logger(log.get_logger("audio"))
 ---@param logger_instance audio.logger|table|nil A logger object that follows the specified logging interface, including methods for `trace`, `debug`, `info`, `warn`, `error`. Pass `nil` to remove the logger
@@ -165,7 +179,7 @@ function M.set_state(new_state)
 	audio_state.set_state(new_state)
 
 	for group, value in pairs(audio_state.get_state().groups) do
-		sound.set_group_gain(group, audio_internal.to_engine_gain(value))
+		sound.set_group_gain(group, value)
 	end
 end
 
@@ -182,7 +196,7 @@ end
 ---		audio.play("click")
 ---		audio.play("coin", 0.5)
 ---@param id string The sound id from the sounds config
----@param gain number|nil Linear gain in range [0 .. 1]. Default is the last used gain of this sound
+---@param gain number|nil Gain in range [0 .. 1]. Default is the last used gain of this sound
 function M.play(id, gain)
 	local sound_config = audio_internal.get_sound_config(id)
 	if not sound_config then
@@ -199,7 +213,7 @@ end
 ---		audio.play_index("footstep", 2, 0.5)
 ---@param id string The sound id from the sounds config
 ---@param index number Index of the url in the sound config urls list, starts from 1
----@param gain number|nil Linear gain in range [0 .. 1]. Default is the last used gain of this sound
+---@param gain number|nil Gain in range [0 .. 1]. Default is the last used gain of this sound
 function M.play_index(id, index, gain)
 	local sound_config = audio_internal.get_sound_config(id)
 	if not sound_config then
@@ -216,7 +230,7 @@ end
 ---		local handle = audio.play_delay("coin", 1, 0.5)
 ---@param id string The sound id from the sounds config
 ---@param delay number Delay in seconds before the sound is played
----@param gain number|nil Linear gain in range [0 .. 1]. Default is the last used gain of this sound
+---@param gain number|nil Gain in range [0 .. 1]. Default is the last used gain of this sound
 ---@return number|nil handle Handle to cancel the delayed play with `audio.cancel_play_delay`. Nil if the sound is not registered or the delay is zero or negative
 function M.play_delay(id, delay, gain)
 	local sound_config = audio_internal.get_sound_config(id)
@@ -279,7 +293,7 @@ end
 ---		audio.fade("music", 0, 1) -- Fade out the music in 1 second
 ---		audio.fade("music", 1, 2) -- Fade in the music in 2 seconds
 ---@param id string The sound id from the sounds config
----@param target_gain number Target linear gain in range [0 .. 1]
+---@param target_gain number Target gain in range [0 .. 1]
 ---@param time number|nil Fade time in seconds. If not set, the gain is applied instantly
 function M.fade(id, target_gain, time)
 	local runtime = audio_internal.get_runtime()
@@ -289,16 +303,12 @@ function M.fade(id, target_gain, time)
 		return
 	end
 
-	local from = runtime.last_gains[id]
-	if not from then
-		from = audio_internal.to_engine_gain(1)
-		audio_internal.set_sound_gain_engine(id, from)
-	end
+	local from = runtime.last_gains[id] or 1
 
-	local target = audio_internal.to_engine_gain(audio_internal.clamp01(target_gain))
+	local target = audio_internal.clamp01(target_gain)
 	if not time or time <= 0 or from == target then
 		runtime.fades[id] = nil
-		audio_internal.set_sound_gain_engine(id, target)
+		audio_internal.set_sound_gain(id, target)
 		return
 	end
 
@@ -311,22 +321,22 @@ end
 
 
 -- Sound Groups
----Set the linear gain of the sound group. The value is stored in the state
+---Set the gain of the sound group. The value is stored in the state
 ---		audio.set_gain("music", 0.5)
 ---		audio.set_gain("sfx", 0.8)
 ---@param group string The sound group name, as it set in the sound components
----@param linear_value number|nil Linear gain in range [0 .. 1]. Default is 1
-function M.set_gain(group, linear_value)
-	local value = audio_internal.clamp01(linear_value)
+---@param gain number|nil Gain in range [0 .. 1]. Default is 1
+function M.set_gain(group, gain)
+	local value = audio_internal.clamp01(gain)
 	audio_state.set_group_gain(group, value)
-	sound.set_group_gain(group, audio_internal.to_engine_gain(value))
+	sound.set_group_gain(group, value)
 end
 
 
----Get the linear gain of the sound group
+---Get the gain of the sound group
 ---		local music_gain = audio.get_gain("music")
 ---@param group string The sound group name, as it set in the sound components
----@return number gain Linear gain in range [0 .. 1]. Default is 1
+---@return number gain Gain in range [0 .. 1]. Default is 1
 function M.get_gain(group)
 	return audio_state.get_group_gain(group)
 end

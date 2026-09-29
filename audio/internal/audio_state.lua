@@ -1,6 +1,6 @@
 ---The audio module state, can be saved and loaded between game sessions
 ---@class audio.state
----@field groups table<string, number> The linear gain of the sound groups by group name
+---@field groups table<string, number> The gain of the sound groups by group name
 
 local M = {}
 M.DEFAULT_GAIN = 1
