@@ -67,7 +67,7 @@ local function play_sound(id, url, gain)
 		generation = play_generation,
 	})
 
-	audio_internal.set_sound_gain_engine(id, engine_gain)
+	runtime.last_gains[id] = engine_gain
 end
 
 

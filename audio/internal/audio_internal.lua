@@ -27,6 +27,7 @@ local MSG_PLAY = hash("audio_play")
 ---@field host_url url|nil
 ---@field next_delay_handle number
 ---@field last_gains table<string, number>
+---@field editor_gains table<string, number>
 ---@field last_play_time table<string, number>
 ---@field playing table<string, number>
 ---@field playing_generation table<string, number>
@@ -46,6 +47,7 @@ local runtime = {
 	host_url = nil,
 	next_delay_handle = 1,
 	last_gains = {},
+	editor_gains = {},
 	last_play_time = {},
 	playing = {},
 	playing_generation = {},
@@ -219,7 +221,14 @@ function M.handle_play(play)
 		return
 	end
 
-	runtime.props.gain = play.gain
+	-- The engine starts the sound with `play gain * component gain`, while the `sound.set_gain`
+	-- replaces the component gain, set in the editor. So the module gain is set as the component
+	-- gain and the editor gain is passed as the play gain. The editor gain is read before the
+	-- first `sound.set_gain` message is processed
+	local editor_gain = M.get_editor_gain(play.url)
+	M.set_sound_gain_engine(play.id, play.gain)
+
+	runtime.props.gain = editor_gain
 	runtime.props.speed = play.speed
 	local id = play.id
 	local generation = play.generation
@@ -230,6 +239,27 @@ function M.handle_play(play)
 		local current_instances = runtime.playing[id] or 0
 		runtime.playing[id] = math.max(0, current_instances - 1)
 	end)
+end
+
+
+---Get the sound component gain, set in the editor. It's read once, since the `sound.set_gain` replaces it
+---@param url hash|string|url
+---@return number
+function M.get_editor_gain(url)
+	local key = tostring(url)
+	local gain = runtime.editor_gains[key]
+	if gain then
+		return gain
+	end
+
+	local is_ok, value = pcall(go.get, url, "gain")
+	if not is_ok or type(value) ~= "number" then
+		logger:warn("Can't read the sound component gain, the editor gain is ignored", url)
+		value = 1
+	end
+
+	runtime.editor_gains[key] = value
+	return value
 end
 
 

@@ -211,6 +211,7 @@ For any issues, questions, or suggestions, please [create an issue](https://gith
 - Register sounds with `audio.add_sounds` from your scripts. The `audio.init` no longer takes the sounds config
 - Sound plays and fading are processed in the `audio.script`
 - The group gains from `audio.set_state` are applied to the engine immediately
+- Fix the sound component gain, set in the editor, was ignored on the sound play
 - Migration from V2:
 	- Add `audio.script` to a persistent game object
 	- Replace `audio.init(sounds)` with `audio.add_sounds(sounds)`
