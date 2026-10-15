@@ -22,6 +22,7 @@ Used to register sounds and manage their playback and gain.
 - [play_delay](#play_delay)
 - [cancel_play_delay](#cancel_play_delay)
 - [stop](#stop)
+- [set_playing](#set_playing)
 - [is_playing](#is_playing)
 - [fade](#fade)
 - [set_gain](#set_gain)
@@ -121,7 +122,7 @@ audio.remove_sounds(sounds)
 
 Unregister the sounds, previously added with `audio.add_sounds`. Pass the same sounds table.
 The sound replaced by another `audio.add_sounds` call with the same id is kept.
-The fades and delayed plays of the removed sounds are canceled. The playing sounds are not stopped,
+The fades and delayed plays of the removed sounds are canceled. The sounds in the fade out of `audio.stop` are stopped instantly. The other playing sounds are not stopped,
 call `audio.stop` before, if the sounds should stop now
 
 - **Parameters:**
@@ -206,6 +207,7 @@ audio.play(id, [gain])
 
  Playback
 Play the sound by id. If the sound config contains a list of urls, a random one will be picked.
+If the sound config has the `fade_in` and the sound is not playing, the sound is faded in from the zero gain.
 The sound is started in `audio.script`
 
 - **Parameters:**
@@ -288,18 +290,45 @@ audio.cancel_play_delay(handle)
 
 ---
 ```lua
-audio.stop(id)
+audio.stop(id, [fade_out])
 ```
 
-Stop all playing instances of the sound
+Stop all playing instances of the sound. With the fade out time the sound is faded out and stopped after the fade.
+The `audio.play`, `audio.set_playing` or `audio.fade` during the fade out cancels the stop.
+After the stop the sound keeps its gain before the fade out, so the next play is not silent
 
 - **Parameters:**
 	- `id` *(string)*: The sound id from the sounds config
+	- `[fade_out]` *(number|nil)*: Fade out time in seconds. Default is the `fade_out` from the sound config. Pass 0 to stop instantly
 
 - **Example Usage:**
 
 ```lua
 audio.stop("music")
+audio.stop("music", 1) -- Fade out the music in 1 second and stop it
+```
+
+### set_playing
+
+---
+```lua
+audio.set_playing(id, is_playing, [fade_time])
+```
+
+Play or stop the sound with the fade, depending on the state. Safe to call every frame with the same state.
+The state change in the middle of the fade turns the fade around from the current gain, without the sound restart.
+Useful for the looped sounds which depend on the game state, like the engine hum or the hover buzz
+
+- **Parameters:**
+	- `id` *(string)*: The sound id from the sounds config
+	- `is_playing` *(boolean)*: Should the sound be playing
+	- `[fade_time]` *(number|nil)*: Fade time in seconds. Default is the `fade_in` or `fade_out` from the sound config
+
+- **Example Usage:**
+
+```lua
+audio.set_playing("buzz", is_hovered)
+audio.set_playing("buzz", is_hovered, 0.2)
 ```
 
 ### is_playing
@@ -332,7 +361,8 @@ end
 audio.fade(id, target_gain, [time])
 ```
 
-Fade the sound gain to the target value over time. Useful to fade in and out the music
+Fade the sound gain to the target value over time. Useful to fade in and out the music.
+It cancels the stop after the fade out of `audio.stop`
 
 - **Parameters:**
 	- `id` *(string)*: The sound id from the sounds config
@@ -400,6 +430,8 @@ The sound config, used to register the sound in the audio module
 ---@field random_pitch number|nil
 ---@field play_cooldown number|nil
 ---@field max_instances number|nil
+---@field fade_in number|nil
+---@field fade_out number|nil
 ```
 
 - **Fields:**
@@ -407,6 +439,8 @@ The sound config, used to register the sound in the audio module
 	- `random_pitch` *(number|nil)*: The random pitch in range [0 .. 1]. The sound speed will be randomized in range [1 - random_pitch .. 1 + random_pitch]
 	- `play_cooldown` *(number|nil)*: The minimum time in seconds between the sound plays. Default is 4/60. Set 0 to disable
 	- `max_instances` *(number|nil)*: The maximum number of simultaneously playing instances. The oldest instances are stopped on overflow
+	- `fade_in` *(number|nil)*: The fade in time in seconds, used by `audio.play` and `audio.set_playing` when the sound is not playing yet
+	- `fade_out` *(number|nil)*: The fade out time in seconds, used by `audio.stop` and `audio.set_playing`. The sound is stopped after the fade
 
 ### audio.state
 

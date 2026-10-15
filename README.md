@@ -22,7 +22,8 @@ Check the [**HTML5 version**](https://insality.github.io/defold-audio/) of the e
 - **Sound Variations** - Pick a random url from the list and randomize the pitch to avoid the repetitive sounds.
 - **Playback Control** - Play cooldown and max instances limit protects the game from the sound spam.
 - **Group Gain** - Manage the gain of the sound groups with a state, ready to be saved between the game sessions.
-- **Fade** - Fade the sound gain in and out over time. Useful for the music and ambient sounds.
+- **Fade** - Fade the sound gain in and out over time, stop the sound after the fade out. Useful for the music and ambient sounds.
+- **Looped Sounds** - Play and stop the looped sound with the fade by the game state, like the engine hum or the hover buzz.
 - **Play Delay** - Schedule a sound to play after a delay and cancel it later by handle.
 
 ## Setup
@@ -31,10 +32,10 @@ Check the [**HTML5 version**](https://insality.github.io/defold-audio/) of the e
 
 Open your `game.project` file and add the following line to the dependencies field under the project section:
 
-**[Defold Audio](https://github.com/Insality/defold-audio/archive/refs/tags/4.zip)**
+**[Defold Audio](https://github.com/Insality/defold-audio/archive/refs/tags/5.zip)**
 
 ```
-https://github.com/Insality/defold-audio/archive/refs/tags/4.zip
+https://github.com/Insality/defold-audio/archive/refs/tags/5.zip
 ```
 
 After that, select `Project ▸ Fetch Libraries` to update [library dependencies]((https://defold.com/manuals/libraries/#setting-up-library-dependencies)). This happens automatically whenever you open a project so you will only need to do this if the dependencies change without re-opening the project.
@@ -73,6 +74,11 @@ audio.add_sounds({
 		url = "main:/sounds#music",
 		play_cooldown = 0,
 	},
+	buzz = {
+		url = "main:/sounds#buzz",
+		fade_in = 0.2,
+		fade_out = 0.2,
+	},
 })
 
 -- Play the sound by id
@@ -92,6 +98,12 @@ audio.cancel_play_delay(handle)
 audio.play("music", 0)
 audio.fade("music", 1, 1)
 
+-- Fade out the music in 1 second and stop it
+audio.stop("music", 1)
+
+-- Play the looped sound while the state is active. It's faded in and out with the config fade times
+audio.set_playing("buzz", is_holding)
+
 -- Manage the sound groups gain. The value is stored in the state
 audio.set_gain("music", 0.5)
 audio.set_gain("sfx", 0.8)
@@ -107,6 +119,8 @@ Each sound is registered with the `audio.sound` config:
 | `random_pitch`  | `number \| nil`       | Randomize the sound speed in range `[1 - random_pitch .. 1 + random_pitch]`                          |
 | `play_cooldown` | `number \| nil`       | The minimum time in seconds between the sound plays. Default is `4/60`. Set `0` to disable           |
 | `max_instances` | `number \| nil`       | The maximum number of the simultaneously playing instances. The sound is restarted on the overflow  |
+| `fade_in`       | `number \| nil`       | The fade in time in seconds. Used by `audio.play` and `audio.set_playing` when the sound is not playing yet |
+| `fade_out`      | `number \| nil`       | The fade out time in seconds. Used by `audio.stop` and `audio.set_playing`. The sound is stopped after the fade |
 
 ### Sound Groups
 
@@ -166,7 +180,8 @@ audio.play(id, [gain])
 audio.play_index(id, index, [gain])
 audio.play_delay(id, delay, [gain])
 audio.cancel_play_delay([handle])
-audio.stop(id)
+audio.stop(id, [fade_out])
+audio.set_playing(id, is_playing, [fade_time])
 audio.is_playing(id)
 audio.fade(id, target_gain, [time])
 
@@ -227,6 +242,16 @@ For any issues, questions, or suggestions, please [create an issue](https://gith
 - Fix the sound component gain, set in the editor, was ignored on the sound play
 - **Breaking:** The gain is not converted anymore, it's the same as in Defold. Previously the passed gain was squared: `audio.play("coin", 0.5)` played with the `0.25` gain, now with `0.5`. It's applied to `audio.play`, `audio.fade` and `audio.set_gain`, including the group gains in the saved state
 	- To keep the previous loudness, square the gain values: `0.5` -> `0.25`
+
+### **V5**
+- Add `fade_in` and `fade_out` to the sound config. The `audio.play` fades in the sound and the `audio.stop` fades it out and stops after the fade
+- Add the `fade_out` param to `audio.stop`. The sound is stopped after the fade out, no more `timer.delay` to stop the music
+	- The `audio.play`, `audio.fade` or `audio.set_playing` during the fade out cancels the stop
+- Add `audio.set_playing` function to play and stop the looped sound with the fade by the game state
+	- Safe to call every frame. The state change in the middle of the fade turns the fade around without the sound restart
+- The sound gain is restored after the fade out stop, so the next `audio.play` without the gain is not silent
+- The `audio.remove_sounds` stops the sounds in the fade out instantly
+- Fix the gain jump for one frame, when the sound was started in the middle of the fade
 
 </details>
 

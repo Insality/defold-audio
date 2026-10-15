@@ -82,7 +82,7 @@ function final(self)
 end
 ```
 
-Pass the same table to `audio.remove_sounds`. If another window registered the sound with the same id after this one, its sound is kept. The `audio.remove_sounds` cancels the fades and delayed plays of the removed sounds. The playing sounds are not stopped, call `audio.stop` before, if the sounds should stop earlier.
+Pass the same table to `audio.remove_sounds`. If another window registered the sound with the same id after this one, its sound is kept. The `audio.remove_sounds` cancels the fades and delayed plays of the removed sounds and stops the sounds in the fade out. The other playing sounds are not stopped, call `audio.stop` before, if the sounds should stop earlier.
 
 
 ## Save the audio state
@@ -135,7 +135,7 @@ end
 
 ## Music with the fade in and fade out
 
-The `audio.fade` changes the sound gain over time. To fade in the music, start it with the zero gain:
+The `audio.fade` changes the sound gain over time. To fade in the music, start it with the zero gain. To fade out and stop it, pass the fade time to `audio.stop`:
 
 ```lua
 local MUSIC_FADE_TIME = 1
@@ -146,14 +146,48 @@ local function play_music()
 end
 
 local function stop_music()
-	audio.fade("music", 0, MUSIC_FADE_TIME)
-	timer.delay(MUSIC_FADE_TIME, false, function()
-		audio.stop("music")
-	end)
+	audio.stop("music", MUSIC_FADE_TIME)
 end
 ```
 
-The `audio.stop` cancels the current fade of the sound, so the music can be stopped instantly at any moment.
+The music is stopped after the fade out. The `audio.play` or `audio.fade` during the fade out cancels the stop. Pass `0` to `audio.stop` to stop the music instantly at any moment.
+
+To crossfade two tracks, register them with different ids:
+
+```lua
+audio.stop("music_menu", 1)
+audio.play("music_battle", 1)
+audio.fade("music_battle", 1, 1)
+```
+
+Or set the fade times in the sound config, then the `audio.play` and `audio.stop` fade the sound by themselves:
+
+```lua
+audio.add_sounds({
+	music = { url = "main:/sounds#music", play_cooldown = 0, fade_in = 1, fade_out = 1 },
+})
+
+audio.play("music") -- Fade in from the zero gain
+audio.stop("music") -- Fade out and stop
+```
+
+
+## Looped sound depending on the game state
+
+The looped sounds like the engine hum, the hover buzz or the holding sound should play while some state is active. Use `audio.set_playing` with the state, it fades the sound in and out and stops it after the fade out:
+
+```lua
+audio.add_sounds({
+	-- Enable the looping in the sound component
+	buzz = { url = "main:/sounds#buzz", fade_in = 0.2, fade_out = 0.2 },
+})
+
+function update(self, dt)
+	audio.set_playing("buzz", self.is_holding)
+end
+```
+
+The call with the same state does nothing, so it's safe to call it every frame or on each state change. If the state is changed in the middle of the fade, the fade turns around from the current gain and the sound is not restarted. The sound gain, passed to `audio.play` or set with `audio.fade`, is kept, so the next fade in returns to it.
 
 > **Note:** Place `audio.script` on a game object in the collection that should own the playback. It processes the fades, delayed plays and starts the sounds, so they keep working even if the game object which called `audio.play` is deleted. Relative sound urls are resolved in the collection of the `audio.add_sounds` call, so prefer full urls with the socket (`main:/sounds#music`).
 
