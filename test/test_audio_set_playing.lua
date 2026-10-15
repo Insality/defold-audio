@@ -241,5 +241,24 @@ return function()
 			audio.set_playing("unknown_sound", true)
 			assert(not audio.is_playing("unknown_sound"))
 		end)
+
+		it("Should warn only on set playing true for the unregistered sound", function()
+			local warnings = 0
+			audio.set_logger({
+				trace = function() end,
+				debug = function() end,
+				info = function() end,
+				warn = function() warnings = warnings + 1 end,
+				error = function() end,
+			})
+
+			audio.set_playing("unknown_sound", false)
+			assert(warnings == 0)
+
+			audio.set_playing("unknown_sound", true)
+			assert(warnings == 1)
+
+			audio.set_logger(nil)
+		end)
 	end)
 end

@@ -324,7 +324,10 @@ end
 function M.set_playing(id, is_playing, fade_time)
 	local sound_config = audio_internal.get_sound_config(id)
 	if not sound_config then
-		logger:warn("Attempt to set playing an unregistered sound", id)
+		-- The unregistered sound is not playing, it's fine to stop it before the sounds are added
+		if is_playing then
+			logger:warn("Attempt to set playing an unregistered sound", id)
+		end
 		return
 	end
 
