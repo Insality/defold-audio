@@ -32,6 +32,7 @@ local MSG_PLAY = hash("audio_play")
 ---@field host_url url|nil
 ---@field next_delay_handle number
 ---@field last_gains table<string, number>
+---@field pans table<string, number> The pan set with `audio.set_pan`. Nil if the pan is not set yet, so the first set is always applied
 ---@field last_play_time table<string, number>
 ---@field playing table<string, number>
 ---@field playing_generation table<string, number>
@@ -52,11 +53,30 @@ local runtime = {
 	host_url = nil,
 	next_delay_handle = 1,
 	last_gains = {},
+	pans = {},
 	last_play_time = {},
 	playing = {},
 	playing_generation = {},
 	props = { speed = 1 },
 }
+
+
+---Clamp the pan to the [-1 .. 1] range
+---@param value number|nil
+---@return number
+function M.clamp_pan(value)
+	value = value or 0
+
+	if value < -1 then
+		return -1
+	end
+
+	if value > 1 then
+		return 1
+	end
+
+	return value
+end
 
 
 ---Clamp the value to the [0 .. 1] range. The vmath.clamp is not used here to keep the double precision
@@ -400,6 +420,7 @@ function M.remove_sounds(sounds)
 			runtime.sound_sources[id] = nil
 			runtime.fades[id] = nil
 			runtime.last_gains[id] = nil
+			runtime.pans[id] = nil
 			runtime.last_play_time[id] = nil
 		end
 	end
@@ -450,6 +471,7 @@ function M.reset_runtime()
 	runtime.fades = {}
 	runtime.delayed_plays = {}
 	runtime.last_gains = {}
+	runtime.pans = {}
 	runtime.last_play_time = {}
 	runtime.playing = {}
 

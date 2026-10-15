@@ -353,6 +353,31 @@ function M.set_playing(id, is_playing, fade_time)
 end
 
 
+---Set the pan of the sound. The pan is kept by the sound component, so the next plays use it too.
+---Cheap to call every frame: the engine is not called if the pan is not changed
+---		audio.set_pan("buzz", -0.5)
+---@param id string The sound id from the sounds config
+---@param pan number Pan in range [-1 .. 1]. -1 is the left channel, 1 is the right one
+function M.set_pan(id, pan)
+	local sound_config = audio_internal.get_sound_config(id)
+	if not sound_config then
+		logger:warn("Attempt to set pan of an unregistered sound", id)
+		return
+	end
+
+	local runtime = audio_internal.get_runtime()
+	local value = audio_internal.clamp_pan(pan)
+	if runtime.pans[id] == value then
+		return
+	end
+
+	runtime.pans[id] = value
+	audio_internal.for_each_url(sound_config, function(url)
+		sound.set_pan(url, value)
+	end)
+end
+
+
 ---Check if the sound is playing now
 ---		if not audio.is_playing("music") then
 ---			audio.play("music")

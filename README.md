@@ -182,6 +182,7 @@ audio.play_delay(id, delay, [gain])
 audio.cancel_play_delay([handle])
 audio.stop(id, [fade_out])
 audio.set_playing(id, is_playing, [fade_time])
+audio.set_pan(id, pan)
 audio.is_playing(id)
 audio.fade(id, target_gain, [time])
 
@@ -249,6 +250,8 @@ For any issues, questions, or suggestions, please [create an issue](https://gith
 	- The `audio.play`, `audio.fade` or `audio.set_playing` during the fade out cancels the stop
 - Add `audio.set_playing` function to play and stop the looped sound with the fade by the game state
 	- Safe to call every frame. The state change in the middle of the fade turns the fade around without the sound restart
+	- The `audio.set_playing(id, false)` for the unregistered sound does nothing and doesn't log the warning, so it can be called before the sounds are added
+- Add `audio.set_pan` function to set the sound pan in range `[-1 .. 1]`. The pan is kept for the next plays of the sound
 - The sound gain is restored after the fade out stop, so the next `audio.play` without the gain is not silent
 - The `audio.remove_sounds` stops the sounds in the fade out instantly
 - Fix the gain jump for one frame, when the sound was started in the middle of the fade

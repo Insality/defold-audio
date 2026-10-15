@@ -23,6 +23,7 @@ Used to register sounds and manage their playback and gain.
 - [cancel_play_delay](#cancel_play_delay)
 - [stop](#stop)
 - [set_playing](#set_playing)
+- [set_pan](#set_pan)
 - [is_playing](#is_playing)
 - [fade](#fade)
 - [set_gain](#set_gain)
@@ -329,6 +330,26 @@ Useful for the looped sounds which depend on the game state, like the engine hum
 ```lua
 audio.set_playing("buzz", is_hovered)
 audio.set_playing("buzz", is_hovered, 0.2)
+```
+
+### set_pan
+
+---
+```lua
+audio.set_pan(id, pan)
+```
+
+Set the pan of the sound. The pan is kept by the sound component, so the next plays use it too.
+Cheap to call every frame: the engine is not called if the pan is not changed
+
+- **Parameters:**
+	- `id` *(string)*: The sound id from the sounds config
+	- `pan` *(number)*: Pan in range [-1 .. 1]. -1 is the left channel, 1 is the right one
+
+- **Example Usage:**
+
+```lua
+audio.set_pan("buzz", -0.5)
 ```
 
 ### is_playing
