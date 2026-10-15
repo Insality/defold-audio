@@ -13,7 +13,9 @@ local DEFAULT_PLAY_COOLDOWN = 4 / 60
 ---@param id string
 ---@param url hash|string|url
 ---@param gain number|nil
-local function play_sound(id, url, gain)
+---@param fade_in number|nil Fade in time, used if the sound is not playing or is stopping now
+---@param is_skip_cooldown boolean|nil
+local function play_sound(id, url, gain, fade_in, is_skip_cooldown)
 	local runtime = audio_internal.get_runtime()
 	if not audio_internal.has_host() then
 		logger:warn("Audio host is missing. Add audio.script to a persistent game object", id)
@@ -33,11 +35,11 @@ local function play_sound(id, url, gain)
 	local max_instances = sound_config.max_instances
 	local playing_instances = runtime.playing[id] or 0
 	if max_instances and max_instances > 0 and playing_instances >= max_instances then
-		M.stop(id)
+		audio_internal.stop_sound(id)
 		playing_instances = 0
 	end
 
-	if play_cooldown > 0 then
+	if play_cooldown > 0 and not is_skip_cooldown then
 		local now = socket.gettime()
 		local last_play_time = runtime.last_play_time[id]
 		if last_play_time and (now - last_play_time) < play_cooldown then
@@ -46,11 +48,25 @@ local function play_sound(id, url, gain)
 		runtime.last_play_time[id] = now
 	end
 
-	local engine_gain = runtime.last_gains[id] or audio_internal.to_engine_gain(1)
+	local sound_gain = audio_internal.get_base_gain(id)
 	local speed = 1
 
 	if gain ~= nil then
-		engine_gain = audio_internal.to_engine_gain(audio_internal.clamp01(gain))
+		sound_gain = audio_internal.clamp01(gain)
+	end
+
+	-- The play cancels the stop after the fade out. The new instance continues from the current gain
+	local start_gain = sound_gain
+	local is_stopping = audio_internal.is_stopping(id)
+	if fade_in and fade_in > 0 and (playing_instances == 0 or is_stopping) then
+		start_gain = 0
+		if playing_instances > 0 then
+			start_gain = runtime.last_gains[id] or 0
+		end
+		runtime.last_gains[id] = start_gain
+		audio_internal.start_fade(id, sound_gain, fade_in, sound_gain)
+	elseif is_stopping then
+		runtime.fades[id] = nil
 	end
 
 	if sound_config.random_pitch and sound_config.random_pitch > 0 then
@@ -62,12 +78,12 @@ local function play_sound(id, url, gain)
 	audio_internal.request_play({
 		id = id,
 		url = url,
-		gain = engine_gain,
+		gain = start_gain,
 		speed = speed,
 		generation = play_generation,
 	})
 
-	runtime.last_gains[id] = engine_gain
+	runtime.last_gains[id] = start_gain
 end
 
 
@@ -101,7 +117,7 @@ function M.init()
 	audio_internal.bind_host(msg.url())
 
 	for group, value in pairs(audio_state.get_state().groups) do
-		sound.set_group_gain(group, audio_internal.to_engine_gain(value))
+		sound.set_group_gain(group, value)
 	end
 
 	logger:info("Audio module initialized", {
@@ -141,6 +157,21 @@ function M.add_sounds(sounds)
 end
 
 
+---Unregister the sounds, previously added with `audio.add_sounds`. Pass the same sounds table.
+---The sound replaced by another `audio.add_sounds` call with the same id is kept.
+---The fades and delayed plays of the removed sounds are canceled. The sounds in the fade out of `audio.stop` are stopped instantly. The other playing sounds are not stopped,
+---call `audio.stop` before, if the sounds should stop now
+---		audio.remove_sounds(require("game.window_sounds"))
+---@param sounds table<string, audio.sound> The same sounds table, passed to `audio.add_sounds`
+function M.remove_sounds(sounds)
+	audio_internal.remove_sounds(sounds)
+
+	logger:info("Audio sounds removed", {
+		sounds = audio_internal.get_sounds_count(),
+	})
+end
+
+
 ---Customize the logging mechanism used by Audio module. You can use **Defold Log** library or provide a custom logger.
 ---		audio.set_logger(log.get_logger("audio"))
 ---@param logger_instance audio.logger|table|nil A logger object that follows the specified logging interface, including methods for `trace`, `debug`, `info`, `warn`, `error`. Pass `nil` to remove the logger
@@ -165,7 +196,7 @@ function M.set_state(new_state)
 	audio_state.set_state(new_state)
 
 	for group, value in pairs(audio_state.get_state().groups) do
-		sound.set_group_gain(group, audio_internal.to_engine_gain(value))
+		sound.set_group_gain(group, value)
 	end
 end
 
@@ -178,11 +209,12 @@ end
 
 
 -- Playback
----Play the sound by id. If the sound config contains a list of urls, a random one will be picked
+---Play the sound by id. If the sound config contains a list of urls, a random one will be picked.
+---If the sound config has the `fade_in` and the sound is not playing, the sound is faded in from the zero gain
 ---		audio.play("click")
 ---		audio.play("coin", 0.5)
 ---@param id string The sound id from the sounds config
----@param gain number|nil Linear gain in range [0 .. 1]. Default is the last used gain of this sound
+---@param gain number|nil Gain in range [0 .. 1]. Default is the last used gain of this sound
 function M.play(id, gain)
 	local sound_config = audio_internal.get_sound_config(id)
 	if not sound_config then
@@ -190,7 +222,7 @@ function M.play(id, gain)
 		return
 	end
 
-	play_sound(id, audio_internal.choose_url(sound_config), gain)
+	play_sound(id, audio_internal.choose_url(sound_config), gain, sound_config.fade_in)
 end
 
 
@@ -199,7 +231,7 @@ end
 ---		audio.play_index("footstep", 2, 0.5)
 ---@param id string The sound id from the sounds config
 ---@param index number Index of the url in the sound config urls list, starts from 1
----@param gain number|nil Linear gain in range [0 .. 1]. Default is the last used gain of this sound
+---@param gain number|nil Gain in range [0 .. 1]. Default is the last used gain of this sound
 function M.play_index(id, index, gain)
 	local sound_config = audio_internal.get_sound_config(id)
 	if not sound_config then
@@ -207,7 +239,7 @@ function M.play_index(id, index, gain)
 		return
 	end
 
-	play_sound(id, audio_internal.get_url_at_index(sound_config, index or 1), gain)
+	play_sound(id, audio_internal.get_url_at_index(sound_config, index or 1), gain, sound_config.fade_in)
 end
 
 
@@ -216,7 +248,7 @@ end
 ---		local handle = audio.play_delay("coin", 1, 0.5)
 ---@param id string The sound id from the sounds config
 ---@param delay number Delay in seconds before the sound is played
----@param gain number|nil Linear gain in range [0 .. 1]. Default is the last used gain of this sound
+---@param gain number|nil Gain in range [0 .. 1]. Default is the last used gain of this sound
 ---@return number|nil handle Handle to cancel the delayed play with `audio.cancel_play_delay`. Nil if the sound is not registered or the delay is zero or negative
 function M.play_delay(id, delay, gain)
 	local sound_config = audio_internal.get_sound_config(id)
@@ -243,24 +275,106 @@ function M.cancel_play_delay(handle)
 end
 
 
----Stop all playing instances of the sound
+---Stop all playing instances of the sound. With the fade out time the sound is faded out and stopped after the fade.
+---The `audio.play`, `audio.set_playing` or `audio.fade` during the fade out cancels the stop.
+---After the stop the sound keeps its gain before the fade out, so the next play is not silent
 ---		audio.stop("music")
+---		audio.stop("music", 1) -- Fade out the music in 1 second and stop it
 ---@param id string The sound id from the sounds config
-function M.stop(id)
-	local runtime = audio_internal.get_runtime()
+---@param fade_out number|nil Fade out time in seconds. Default is the `fade_out` from the sound config. Pass 0 to stop instantly
+function M.stop(id, fade_out)
 	local sound_config = audio_internal.get_sound_config(id)
 	if not sound_config then
 		logger:warn("Attempt to stop an unregistered sound", id)
 		return
 	end
 
-	runtime.fades[id] = nil
-	runtime.playing_generation[id] = (runtime.playing_generation[id] or 0) + 1
+	if fade_out == nil then
+		fade_out = sound_config.fade_out
+	end
 
+	if not fade_out or fade_out <= 0 or not M.is_playing(id) then
+		audio_internal.stop_sound(id)
+		return
+	end
+
+	-- Keep the current fade out, the repeated stop should not restart it
+	if audio_internal.is_stopping(id) then
+		return
+	end
+
+	local runtime = audio_internal.get_runtime()
+	if (runtime.last_gains[id] or 1) <= 0 then
+		audio_internal.stop_sound(id)
+		return
+	end
+
+	audio_internal.start_fade(id, 0, fade_out, audio_internal.get_base_gain(id), true)
+end
+
+
+---Play or stop the sound with the fade, depending on the state. Safe to call every frame with the same state.
+---The state change in the middle of the fade turns the fade around from the current gain, without the sound restart.
+---Useful for the looped sounds which depend on the game state, like the engine hum or the hover buzz
+---		audio.set_playing("buzz", is_hovered)
+---		audio.set_playing("buzz", is_hovered, 0.2)
+---@param id string The sound id from the sounds config
+---@param is_playing boolean Should the sound be playing
+---@param fade_time number|nil Fade time in seconds. Default is the `fade_in` or `fade_out` from the sound config
+function M.set_playing(id, is_playing, fade_time)
+	local sound_config = audio_internal.get_sound_config(id)
+	if not sound_config then
+		-- The unregistered sound is not playing, it's fine to stop it before the sounds are added
+		if is_playing then
+			logger:warn("Attempt to set playing an unregistered sound", id)
+		end
+		return
+	end
+
+	local is_stopping = audio_internal.is_stopping(id)
+	local is_active = M.is_playing(id) and not is_stopping
+	if is_playing == is_active then
+		return
+	end
+
+	if not is_playing then
+		M.stop(id, fade_time or sound_config.fade_out or 0)
+		return
+	end
+
+	local fade_in = fade_time or sound_config.fade_in or 0
+	if is_stopping and M.is_playing(id) then
+		local base_gain = audio_internal.get_base_gain(id)
+		audio_internal.start_fade(id, base_gain, fade_in, base_gain)
+		return
+	end
+
+	play_sound(id, audio_internal.choose_url(sound_config), nil, fade_in, true)
+end
+
+
+---Set the pan of the sound. The pan is kept by the sound component, so the next plays use it too.
+---Cheap to call every frame: the engine is not called if the pan is not changed
+---		audio.set_pan("buzz", -0.5)
+---@param id string The sound id from the sounds config
+---@param pan number Pan in range [-1 .. 1]. -1 is the left channel, 1 is the right one
+function M.set_pan(id, pan)
+	local sound_config = audio_internal.get_sound_config(id)
+	if not sound_config then
+		logger:warn("Attempt to set pan of an unregistered sound", id)
+		return
+	end
+
+	local runtime = audio_internal.get_runtime()
+	local value = audio_internal.clamp_pan(pan)
+	if runtime.pans[id] == value then
+		return
+	end
+
+	runtime.pans[id] = value
 	audio_internal.for_each_url(sound_config, function(url)
-		sound.stop(url)
+		sound.set_pan(url, value)
 	end)
-	runtime.playing[id] = 0
 end
 
 
@@ -275,58 +389,41 @@ function M.is_playing(id)
 end
 
 
----Fade the sound gain to the target value over time. Useful to fade in and out the music
+---Fade the sound gain to the target value over time. Useful to fade in and out the music.
+---It cancels the stop after the fade out of `audio.stop`
 ---		audio.fade("music", 0, 1) -- Fade out the music in 1 second
 ---		audio.fade("music", 1, 2) -- Fade in the music in 2 seconds
 ---@param id string The sound id from the sounds config
----@param target_gain number Target linear gain in range [0 .. 1]
+---@param target_gain number Target gain in range [0 .. 1]
 ---@param time number|nil Fade time in seconds. If not set, the gain is applied instantly
 function M.fade(id, target_gain, time)
-	local runtime = audio_internal.get_runtime()
 	local sound_config = audio_internal.get_sound_config(id)
 	if not sound_config then
 		logger:warn("Attempt to fade an unregistered sound", id)
 		return
 	end
 
-	local from = runtime.last_gains[id]
-	if not from then
-		from = audio_internal.to_engine_gain(1)
-		audio_internal.set_sound_gain_engine(id, from)
-	end
-
-	local target = audio_internal.to_engine_gain(audio_internal.clamp01(target_gain))
-	if not time or time <= 0 or from == target then
-		runtime.fades[id] = nil
-		audio_internal.set_sound_gain_engine(id, target)
-		return
-	end
-
-	runtime.fades[id] = {
-		value = from,
-		target = target,
-		remaining = time,
-	}
+	audio_internal.start_fade(id, audio_internal.clamp01(target_gain), time)
 end
 
 
 -- Sound Groups
----Set the linear gain of the sound group. The value is stored in the state
+---Set the gain of the sound group. The value is stored in the state
 ---		audio.set_gain("music", 0.5)
 ---		audio.set_gain("sfx", 0.8)
 ---@param group string The sound group name, as it set in the sound components
----@param linear_value number|nil Linear gain in range [0 .. 1]. Default is 1
-function M.set_gain(group, linear_value)
-	local value = audio_internal.clamp01(linear_value)
+---@param gain number|nil Gain in range [0 .. 1]. Default is 1
+function M.set_gain(group, gain)
+	local value = audio_internal.clamp01(gain)
 	audio_state.set_group_gain(group, value)
-	sound.set_group_gain(group, audio_internal.to_engine_gain(value))
+	sound.set_group_gain(group, value)
 end
 
 
----Get the linear gain of the sound group
+---Get the gain of the sound group
 ---		local music_gain = audio.get_gain("music")
 ---@param group string The sound group name, as it set in the sound components
----@return number gain Linear gain in range [0 .. 1]. Default is 1
+---@return number gain Gain in range [0 .. 1]. Default is 1
 function M.get_gain(group)
 	return audio_state.get_group_gain(group)
 end

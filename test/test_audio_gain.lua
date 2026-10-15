@@ -54,12 +54,6 @@ return function()
 			assert(audio.get_gain("music") == 1)
 		end)
 
-		it("Should convert the linear gain to the engine gain", function()
-			assert(audio_internal.to_engine_gain(1) == 1)
-			assert(audio_internal.to_engine_gain(0) == 0)
-			assert(audio_internal.to_engine_gain(0.5) == 0.25)
-		end)
-
 		it("Should keep the group gains in the state", function()
 			audio.set_gain("music", 0.3)
 			audio.set_gain("sfx", 0.7)
@@ -89,23 +83,23 @@ return function()
 			local runtime = audio_internal.get_runtime()
 
 			audio.play("click", 0.5)
-			assert(runtime.last_gains["click"] == audio_internal.to_engine_gain(0.5))
+			assert(runtime.last_gains["click"] == 0.5)
 
 			audio.play("click")
-			assert(runtime.last_gains["click"] == audio_internal.to_engine_gain(0.5))
+			assert(runtime.last_gains["click"] == 0.5)
 
 			audio.play("click", 1)
-			assert(runtime.last_gains["click"] == audio_internal.to_engine_gain(1))
+			assert(runtime.last_gains["click"] == 1)
 		end)
 
 		it("Should clamp the sound gain to [0 .. 1]", function()
 			local runtime = audio_internal.get_runtime()
 
 			audio.play("click", 5)
-			assert(runtime.last_gains["click"] == audio_internal.to_engine_gain(1))
+			assert(runtime.last_gains["click"] == 1)
 
 			audio.play("click", -5)
-			assert(runtime.last_gains["click"] == audio_internal.to_engine_gain(0))
+			assert(runtime.last_gains["click"] == 0)
 		end)
 	end)
 end

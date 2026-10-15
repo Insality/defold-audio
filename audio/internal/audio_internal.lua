@@ -7,6 +7,8 @@ local MSG_PLAY = hash("audio_play")
 ---@field value number
 ---@field target number
 ---@field remaining number
+---@field base_gain number|nil The sound gain after the fade, kept when the fade is interrupted by the stop. Used by `audio.stop` with fade and the fade in of `audio.play`
+---@field is_stop boolean|nil Stop the sound after the fade is finished
 
 ---@class audio.internal.delayed_play
 ---@field id string
@@ -19,15 +21,18 @@ local MSG_PLAY = hash("audio_play")
 ---@field random_pitch number|nil The random pitch in range [0 .. 1]. The sound speed will be randomized in range [1 - random_pitch .. 1 + random_pitch]
 ---@field play_cooldown number|nil The minimum time in seconds between the sound plays. Default is 4/60. Set 0 to disable
 ---@field max_instances number|nil The maximum number of simultaneously playing instances. The oldest instances are stopped on overflow
+---@field fade_in number|nil The fade in time in seconds, used by `audio.play` and `audio.set_playing` when the sound is not playing yet
+---@field fade_out number|nil The fade out time in seconds, used by `audio.stop` and `audio.set_playing`. The sound is stopped after the fade
 
 ---@class audio.internal.runtime
 ---@field sounds table<string, audio.sound>
+---@field sound_sources table<string, audio.sound> The config tables passed to `add_sounds`, to remove only the own sounds
 ---@field fades table<string, audio.internal.fade>
 ---@field delayed_plays table<number, audio.internal.delayed_play>
 ---@field host_url url|nil
 ---@field next_delay_handle number
 ---@field last_gains table<string, number>
----@field editor_gains table<string, number>
+---@field pans table<string, number> The pan set with `audio.set_pan`. Nil if the pan is not set yet, so the first set is always applied
 ---@field last_play_time table<string, number>
 ---@field playing table<string, number>
 ---@field playing_generation table<string, number>
@@ -42,17 +47,36 @@ M.MSG_PLAY = MSG_PLAY
 ---@type audio.internal.runtime
 local runtime = {
 	sounds = {},
+	sound_sources = {},
 	fades = {},
 	delayed_plays = {},
 	host_url = nil,
 	next_delay_handle = 1,
 	last_gains = {},
-	editor_gains = {},
+	pans = {},
 	last_play_time = {},
 	playing = {},
 	playing_generation = {},
-	props = { gain = 1, speed = 1 },
+	props = { speed = 1 },
 }
+
+
+---Clamp the pan to the [-1 .. 1] range
+---@param value number|nil
+---@return number
+function M.clamp_pan(value)
+	value = value or 0
+
+	if value < -1 then
+		return -1
+	end
+
+	if value > 1 then
+		return 1
+	end
+
+	return value
+end
 
 
 ---Clamp the value to the [0 .. 1] range. The vmath.clamp is not used here to keep the double precision
@@ -70,14 +94,6 @@ function M.clamp01(value)
 	end
 
 	return value
-end
-
-
----The engine gain is not linear, so the linear value is converted to the engine one
----@param linear_value number
----@return number
-function M.to_engine_gain(linear_value)
-	return linear_value * linear_value
 end
 
 
@@ -128,19 +144,21 @@ function M.get_sound_config(id)
 end
 
 
+---Set the gain to all playing instances of the sound. It's the only place where the sound gain is applied.
+---The engine multiplies it with the sound component gain, set in the editor
 ---@param id string
----@param engine_gain number
-function M.set_sound_gain_engine(id, engine_gain)
+---@param gain number
+function M.set_sound_gain(id, gain)
 	local sound_config = M.get_sound_config(id)
 	if not sound_config then
 		return
 	end
 
 	M.for_each_url(sound_config, function(url)
-		sound.set_gain(url, engine_gain)
+		sound.set_gain(url, gain)
 	end)
 
-	runtime.last_gains[id] = engine_gain
+	runtime.last_gains[id] = gain
 end
 
 
@@ -155,8 +173,84 @@ function M.update_fades(dt)
 			fade.remaining = fade.remaining - dt
 		end
 
-		M.set_sound_gain_engine(id, fade.value)
+		M.set_sound_gain(id, fade.value)
+
+		if fade.is_stop and not runtime.fades[id] then
+			M.stop_sound(id)
+			runtime.last_gains[id] = fade.base_gain
+		end
 	end
+end
+
+
+---Get the sound gain without the current fade in or fade out. It's the gain the sound should have when played
+---@param id string
+---@return number
+function M.get_base_gain(id)
+	local fade = runtime.fades[id]
+	if fade then
+		if fade.base_gain ~= nil then
+			return fade.base_gain
+		end
+		return fade.target
+	end
+
+	return runtime.last_gains[id] or 1
+end
+
+
+---@param id string
+---@return boolean
+function M.is_stopping(id)
+	local fade = runtime.fades[id]
+	return fade ~= nil and fade.is_stop == true
+end
+
+
+---Start the fade from the current gain. Without the time the gain is applied instantly
+---@param id string
+---@param target number
+---@param time number|nil
+---@param base_gain number|nil
+---@param is_stop boolean|nil
+function M.start_fade(id, target, time, base_gain, is_stop)
+	local from = runtime.last_gains[id] or 1
+	if not time or time <= 0 or from == target then
+		runtime.fades[id] = nil
+		M.set_sound_gain(id, target)
+		return
+	end
+
+	runtime.fades[id] = {
+		value = from,
+		target = target,
+		remaining = time,
+		base_gain = base_gain,
+		is_stop = is_stop,
+	}
+end
+
+
+---Stop all playing instances of the sound instantly. The interrupted fade in or fade out restores the sound base gain
+---@param id string
+function M.stop_sound(id)
+	local sound_config = M.get_sound_config(id)
+	if not sound_config then
+		return
+	end
+
+	local fade = runtime.fades[id]
+	if fade and fade.base_gain ~= nil then
+		runtime.last_gains[id] = fade.base_gain
+	end
+
+	runtime.fades[id] = nil
+	runtime.playing_generation[id] = (runtime.playing_generation[id] or 0) + 1
+
+	M.for_each_url(sound_config, function(url)
+		sound.stop(url)
+	end)
+	runtime.playing[id] = 0
 end
 
 
@@ -221,16 +315,14 @@ function M.handle_play(play)
 		return
 	end
 
-	-- The engine starts the sound with `play gain * component gain`, while the `sound.set_gain`
-	-- replaces the component gain, set in the editor. So the module gain is set as the component
-	-- gain and the editor gain is passed as the play gain. The editor gain is read before the
-	-- first `sound.set_gain` message is processed
-	local editor_gain = M.get_editor_gain(play.url)
-	M.set_sound_gain_engine(play.id, play.gain)
-
-	runtime.props.gain = editor_gain
-	runtime.props.speed = play.speed
 	local id = play.id
+	if not runtime.sounds[id] then
+		-- The sound is removed before the host handled the play
+		runtime.playing[id] = math.max(0, (runtime.playing[id] or 0) - 1)
+		return
+	end
+
+	runtime.props.speed = play.speed
 	local generation = play.generation
 	sound.play(play.url, runtime.props, function()
 		if (runtime.playing_generation[id] or 0) ~= generation then
@@ -239,27 +331,11 @@ function M.handle_play(play)
 		local current_instances = runtime.playing[id] or 0
 		runtime.playing[id] = math.max(0, current_instances - 1)
 	end)
-end
 
-
----Get the sound component gain, set in the editor. It's read once, since the `sound.set_gain` replaces it
----@param url hash|string|url
----@return number
-function M.get_editor_gain(url)
-	local key = tostring(url)
-	local gain = runtime.editor_gains[key]
-	if gain then
-		return gain
-	end
-
-	local is_ok, value = pcall(go.get, url, "gain")
-	if not is_ok or type(value) ~= "number" then
-		logger:warn("Can't read the sound component gain, the editor gain is ignored", url)
-		value = 1
-	end
-
-	runtime.editor_gains[key] = value
-	return value
+	-- The `sound.play` only creates the sound instance, it starts playing on the next component update.
+	-- So the gain is applied to the new instance too, before it's heard. The running fade keeps its current gain
+	local fade = runtime.fades[id]
+	M.set_sound_gain(id, fade and fade.value or play.gain)
 end
 
 
@@ -316,6 +392,43 @@ function M.add_sounds(sounds)
 
 	for id, sound_config in pairs(sounds) do
 		runtime.sounds[id] = resolve_sound_config(sound_config)
+		runtime.sound_sources[id] = sound_config
+	end
+end
+
+
+---Unregister the sounds of the sounds table. The sound is removed only if it's registered with the same
+---config table, so the sound replaced by another `add_sounds` call is kept. The fades and delayed plays of
+---the removed sounds are canceled. The sounds in the fade out of `audio.stop` are stopped instantly.
+---The other playing sounds are still tracked until they finish
+---@param sounds table<string, audio.sound>|nil
+function M.remove_sounds(sounds)
+	if not sounds then
+		return
+	end
+
+	local removed = {}
+	for id, sound_config in pairs(sounds) do
+		if runtime.sound_sources[id] == sound_config then
+			-- The sound is stopped after the fade out, without the fade it will play forever
+			if M.is_stopping(id) then
+				M.stop_sound(id)
+			end
+
+			removed[id] = true
+			runtime.sounds[id] = nil
+			runtime.sound_sources[id] = nil
+			runtime.fades[id] = nil
+			runtime.last_gains[id] = nil
+			runtime.pans[id] = nil
+			runtime.last_play_time[id] = nil
+		end
+	end
+
+	for handle, delayed in pairs(runtime.delayed_plays) do
+		if removed[delayed.id] then
+			runtime.delayed_plays[handle] = nil
+		end
 	end
 end
 
@@ -323,6 +436,7 @@ end
 ---@param sounds table<string, audio.sound>|nil
 function M.set_sounds(sounds)
 	runtime.sounds = {}
+	runtime.sound_sources = {}
 	M.add_sounds(sounds)
 end
 
@@ -357,6 +471,7 @@ function M.reset_runtime()
 	runtime.fades = {}
 	runtime.delayed_plays = {}
 	runtime.last_gains = {}
+	runtime.pans = {}
 	runtime.last_play_time = {}
 	runtime.playing = {}
 
